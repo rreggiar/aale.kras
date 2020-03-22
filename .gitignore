@@ -1,0 +1,5 @@
+*/*/trash/
+*/trash/
+*.fastq
+data/*/*/input/
+data/other/tcga/
