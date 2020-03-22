@@ -2762,8 +2762,52 @@ titerPlot <- ggplot(cell.Titer) +
   scale_fill_viridis_d(option = 'magma', guide = F) +
   geom_hline(yintercept = seq(0,4,1), color = 'white')
 
+
+cell.Titer <- read_csv('../data/other/wet.lab/cellTiter.csv', skip = 1, 
+                       col_names = c('background', 'si', '1','2','3','4','5','6','7','8','9'))
+cell.Titer['M1'] <- rowMeans(cell.Titer[, 3:5])
+cell.Titer['M2'] <- rowMeans(cell.Titer[, 6:8])
+cell.Titer['M3'] <- rowMeans(cell.Titer[, 9:11])
+
+cell.Titer %>% 
+  filter(background == 'KRAS_AALE') %>% 
+  select(si, M1, M2, M3) %>%
+  column_to_rownames('si') %>% 
+  t() %>% 
+  as.tibble() %>% 
+  rename(siKRAS = 'KRAS',
+         siCTRL = 'NC.1',
+         `siRIG-I` = 'RIG-I',
+         siMDA5 = 'MDA5') %>% 
+  gather(target, Rel.Luminescence) %>%
+  mutate(Rel.Luminescence = Rel.Luminescence/1e06) %>% 
+  ggplot(aes(target, Rel.Luminescence)) + 
+  geom_point(size = rel(0.5)) + 
+  geom_boxplot(size = rel(0.5)) + 
+  geom_signif(comparisons =  list(c('siCTRL','siKRAS'),
+                                  c('siCTRL', 'siMDA5'),
+                                  c('siCTRL', 'siRIG-I')),
+                                   test = 't.test', step_increase = 0.075, 
+              size = rel(0.25), inherit.aes = T, textsize = rel(2)) + 
+  # ggsignif::geom_signif(comparisons = list(c('siCTRL','siKRAS')), 
+  #                       test = 't.test', vjust = 0) +
+  # ggsignif::geom_signif(comparisons = list(c('siCTRL', 'siMDA5')), 
+  #                       test = 't.test', vjust = 1, ) +
+  # ggsignif::geom_signif(comparisons = list(c('siCTRL', 'siRIG-I')), 
+  #                       test = 't.test', vjust = 0.30) +
+  scale_x_discrete(limits=c('siCTRL','siKRAS', 'siMDA5', 'siRIG-I')) + 
+  xlab('')
+                         
+
+
+ggplot(cell.Titer, aes(x=si, y=mean/1e+06, ymin = mean/1e+06 - sd/1e+06, 
+               ymax = mean/1e+06 + sd/1e+06, fill=si)) + 
+  geom_boxplot() 
+
+
+
 titerPlot
-ggsave(plot = titerPlot, 'figures/fig.1/ctg.2.5x3.5.pdf', height = 2.5, width = 3.5, units = 'in')
+ggsave('../figures/fig.1/ctg.2.5x2.5.pdf', height = 3, width = 3, units = 'in')
 
 ```
 
