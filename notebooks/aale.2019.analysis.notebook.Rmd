@@ -369,7 +369,7 @@ plot.tet.volcano(ha1em.quant)
 ### DESeqII Output:
 *import DEseq output files*
 ```{r}
-ha1em.de.seq <- read.csv('data/ha1em.kras.v.ctrl.de-seq.csv') %>% 
+ha1em.de.seq <- read.csv('../data/real.data/ha1em.kras.v.ctrl.de-seq.csv') %>% 
   filter(padj < 0.01, padj > 0)
 names(ha1em.de.seq) <- c('Gene', 'baseMean', 'log2fc', 'lfcse', 'pval', 'padj')
 aale.de.seq <- read.csv('data/aale.intra.kras.v.ctrl.de-seq.csv') %>% 
@@ -482,12 +482,12 @@ plot.isg.volcano <- function(quant.file) {
 } 
   
 isg.ha1em.de.seq <- plot.isg.volcano(ha1em.de.seq)
-ggsave(plot = isg.ha1em.de.seq, 'Figures/fig.1/ha1e.isg.volcano.2.5x3.5.pdf', 
+ggsave(plot = isg.ha1em.de.seq, 'figures/fig.1/ha1e.isg.volcano.2.5x3.5.pdf', 
        height = 2.5, width = 3.5, units = 'in')
 
 isg.aale.de.seq <- plot.isg.volcano(aale.de.seq)
 isg.aale.de.seq
-ggsave(plot = isg.aale.de.seq, 'Figures/fig.1/isg.volcano.2.5x3.5.pdf', height = 2.5, width = 3.5, units = 'in')
+ggsave(plot = isg.aale.de.seq, 'figures/fig.1/isg.volcano.2.5x3.5.pdf', height = 2.5, width = 3.5, units = 'in')
 
 ```
 
@@ -2457,7 +2457,7 @@ gsea.df %>%
         axis.text.x = element_text(angle = 40, hjust = 1)) + 
   scale_x_continuous(position = 'top')
 
-ggsave('Figures/fig.1/gsea.bar.2.5x3.5.pdf', height = 2.5, width = 3.5, units = 'in')
+ggsave('figures/fig.1/gsea.bar.2.5x3.5.pdf', height = 2.5, width = 3.5, units = 'in')
 
 filt.gsea.df %>% 
   mutate(condition = 'AALE') %>% 
@@ -2542,7 +2542,7 @@ gene.set.list <-  list(
 
 ggVennDiagram(gene.set.list) + scale_fill_viridis_c()
   
-ggsave('Figures/fig.1/gsea.venn.3.5x3.5.pdf', height = 3.5, width = 3.5, units = 'in')
+ggsave('figures/fig.1/gsea.venn.3.5x3.5.pdf', height = 3.5, width = 3.5, units = 'in')
 
 
 aale.norm.counts <- 
@@ -2711,7 +2711,7 @@ dev.off()
 ```{r}
 # cell.Titer <- read.csv('~/Thesis/Projects/KRAS.AALE/AALE.figures/cellTiter.csv', 
 #                       header = FALSE)
-cell.Titer <- read.csv('~/thesis/projects/aale.kras/figures/cellTiter.csv', 
+cell.Titer <- read.csv('../data/other/cellTiter.csv', 
                       header = FALSE)
 colnames(cell.Titer) <- c('background', 'si', '1','2','3','4','5','6','7','8','9')
 kras.v.kras <- t.test(as.numeric(cell.Titer[1, 3:11]),  as.numeric(cell.Titer[2, 3:11]))$p.value
@@ -2763,7 +2763,7 @@ titerPlot <- ggplot(cell.Titer) +
   geom_hline(yintercept = seq(0,4,1), color = 'white')
 
 titerPlot
-ggsave(plot = titerPlot, 'Figures/fig.1/ctg.2.5x3.5.pdf', height = 2.5, width = 3.5, units = 'in')
+ggsave(plot = titerPlot, 'figures/fig.1/ctg.2.5x3.5.pdf', height = 2.5, width = 3.5, units = 'in')
 
 ```
 

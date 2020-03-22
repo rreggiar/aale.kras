@@ -2,19 +2,19 @@
     "collab_server" : "",
     "contents" : "",
     "created" : 1584831364298.000,
-    "dirty" : true,
+    "dirty" : false,
     "encoding" : "UTF-8",
     "folds" : "",
-    "hash" : "0",
+    "hash" : "722558900",
     "id" : "6A4238AD",
-    "lastKnownWriteTime" : 1584830388,
-    "last_content_update" : 1584832089077,
+    "lastKnownWriteTime" : 1584842409,
+    "last_content_update" : 1584842409031,
     "path" : "~/thesis/projects/aale.kras/notebooks/aale.2019.analysis.notebook.Rmd",
     "project_path" : "aale.2019.analysis.notebook.Rmd",
     "properties" : {
         "chunk_output_type" : "console",
-        "cursorPosition" : "1472,29",
-        "scrollLine" : "1462"
+        "cursorPosition" : "1746,29",
+        "scrollLine" : "1726"
     },
     "read_only" : false,
     "read_only_alternatives" : [
