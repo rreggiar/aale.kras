@@ -7,11 +7,12 @@ output:
     toc: true
     toc_depth: 4
 editor_options: 
-  chunk_output_type: console
+  chunk_output_type: inline
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(root.dir = '/home/rreggiar/notebooks')
 ```
 ### Load in
 ```{r echo=FALSE}
@@ -25,11 +26,11 @@ suppressPackageStartupMessages({
   library(cowplot)
   library(extrafont)
   library(scales)
-  library(fgsea)
+  #library(fgsea)
   library(msigdbr)
   library(ggpubr)
   library(grid)
-  library(ggtern)
+  #library(ggtern)
   library(viridis)
 })
 
@@ -56,323 +57,39 @@ theme_set(theme_foundation(base_size = 7, base_family = 'Helvetica') +
                 panel.grid.minor = element_blank(),
           ))
 
-
-```
-
-### Sleuth Output
-```{r}
-aale.quant <- read.csv('data/aale.quant.data.log2fc.csv')[, -1] %>% 
-  separate(Name, sep = '\\|', into = c('ENST', 'ENSG', 'OTTG', 'OTTT', 'TX', 'GENE', 'LEN', 'TYPE'))
-ha1em.quant <- read.csv('data/ha1em.quant.data.log2fc.csv')[, -1] %>% 
-  separate(Name, sep = '\\|', into = c('ENST', 'ENSG', 'OTTG', 'OTTT', 'TX', 'GENE', 'LEN', 'TYPE'))
-```
-
-#### IFN boxplot:
-```{r}
-stdev.aale.quant <- read.csv('data/no.merge.quant.data.log2fc.csv')[, -1] %>% 
-  separate(Name, sep = '\\|', into = c('ENST', 'ENSG', 'OTTG', 'OTTT', 'TX', 'GENE', 'LEN', 'TYPE'))
-
-ifn.aale.quant <- 
-  stdev.aale.quant %>% 
-  filter(grepl('^IFN', GENE)) %>% 
-  select(GENE, avg_kras, avg_ctrl, std_kras, std_ctrl) %>% 
-  gather(condition, avg, -GENE) %>% 
-  separate(condition, sep = '_', 
-           into = c('measure', 'condition')) %>% 
-  group_by(GENE, measure, condition) %>% 
-  summarize(total = sum(avg)) %>% 
-  pivot_wider(names_from = measure,
-              values_from = total)
-
-ifn.aale.quant$condition <- factor(ifn.aale.quant$condition, levels = c('ctrl', 'kras'))
-
-ggplot(ifn.aale.quant,
-       aes(x = reorder(GENE, - avg), 
-           ymin = avg - std,
-           y = avg,
-           ymax = avg + std,
-           color = condition)) + 
-    geom_hline(yintercept = c(0,20,40,60),
-             color = 'grey',
-             linetype = 'dotted') + 
-  geom_errorbar(stat = 'identity', position = position_dodge2(width = 1, reverse = F)) +
-  geom_point(stat = 'identity', position = position_dodge2(width = 1, reverse = F)) +
-  scale_color_manual(name = '', values = c('#FDE725FF','#440154FF')) + 
-
-  xlab('') + 
-  ylab('TPM') + 
-  theme(axis.text.x = element_text(angle = 40, hjust = 1))
-```
-
-#### Total DE Volcano Plots:
-```{r}
-plot.de.volcano <- function(quant.file) {
-  ggplot(quant.file, aes(y=-log10(pval),
-                     x=log2fc,
-         color = ifelse(abs(log2fc) > 1 & pval < 0.05, 'not', 'sig'))) +
-    theme(axis.line = element_blank()) +
-  geom_point(size = 2, alpha = 0.5) + 
-    geom_rug(size = 1, alpha = 0.3) + 
-  scale_x_continuous(limits = c(-11, 11)) +
-  scale_y_continuous(limits = c(0, 12)) +
-  xlab('log2(Fold Change)') +
-  ylab('-log10(pvalue)') + 
-  geom_hline(yintercept = -log10(0.05), linetype='dotted', alpha = 0.4) +
-  geom_vline(xintercept = 0, linetype='dotted', alpha = 0.4) +
-  geom_hline(yintercept = -log10(0.05), linetype='dotted', alpha = 0.4) +
-  geom_vline(xintercept = c(-1,0,1), linetype='dotted', alpha = 0.4) + 
-  scale_color_manual(name='', guide = F, values = c('black','grey')) + 
-    ggrepel::geom_text_repel(aes(label =
-    ifelse(abs(-log10(pval)) > 1.3 & abs(log2fc) > 3.5, 
-                                        as.character(TX), '')),
-                          box.padding = unit('0.2', 'lines'),
-                          segment.color = 'gray',
-                          color = 'black',
-                          ylim = c(1.3, Inf), size = 4) 
+set_my_theme <- function(base_size=7, base_family='Helvetica'){
+  theme_set(theme_foundation(base_size = 7, base_family = 'Helvetica') + 
+            theme(plot.title = element_blank(),
+                panel.background = element_rect(colour = NA),
+                plot.background = element_rect(colour = NA),
+                panel.border = element_rect(colour = NA),
+                axis.title = element_text(face = "bold",size = rel(1)),
+                axis.title.y = element_text(angle=90,vjust =2),
+                axis.title.x = element_text(vjust = -0.2),
+                axis.text = element_text(), 
+                axis.line = element_blank(),
+                strip.text = element_text(),
+                strip.background = element_blank(),
+                legend.key.size= unit(0.2, "cm"),
+                legend.spacing = unit(0, "cm"),
+                legend.title = element_text(face="italic"),
+                legend.text = element_text(face = 'bold'),
+                plot.margin=margin(10,5,5,5,unit = "mm"),
+                panel.grid.major = element_blank(),
+                panel.grid.minor = element_blank(),
+          ))
 }
 
-plot.de.volcano(ha1em.quant)
-plot.de.volcano(aale.quant)
-```
-
-#### ZNF Volcano Plots:
-```{r}
-ZNFs <- c('ZNF695','ZNF662','ZNF354A','ZNF354C','ZNF736','ZKSCAN5','ZNF655','ZKSCAN1','ZSCAN21','ZNF425','ZNF34','ZFP92','ZNF202','ZNF605',
-'ZNF140','ZNF10','ZNF268','ZNF75A','ZNF557','ZNF558','ZNF699','ZNF426','ZNF561','ZNF627','ZNF823','ZNF433','ZNF844','ZNF788','ZNF563','ZNF442',
-'ZNF791','ZNF506','ZNF253','ZNF93','ZNF682','ZNF90','ZNF486','ZNF737','ZNF626','ZNF85','ZNF429','ZNF492','ZFP82','ZNF382','ZNF568','ZNF569',
-'ZNF570','ZNF607','ZNF649','ZNF610','ZNF880','ZNF528','ZNF83','ZNF415','ZNF347','ZNF525','ZNF582','ZNF583','ZNF667','ZNF471','ZNF586','ZNF552',
-'ZNF814','ZNF135','ZNF441','ZNF257','ZFP14','ZNF665','ZNF793','ZNF730','ZNF133','ZNF334')
-znf.names <- read.delim('data/znf.names', header = F)
-znf.names$class <- ifelse(znf.names$V1 %in% ZNFs, 'KRAB', 'OTHER')
-
-plot.znf.volcano <- function(quant.file) {
-  quant.file <- merge(quant.file, znf.names, by.x = 'GENE', by.y = 'V1')
-  ggplot(quant.file, aes(y=-log10(pval),
-                     x=log2fc,
-         color = class )) +
-    theme(axis.line = element_blank()) + 
-  geom_point(size = 2, alpha = 0.5) + 
-    geom_rug(size = 1, alpha = 0.3) + 
-  scale_x_continuous(limits = c(-4, 4)) +
-  scale_y_continuous(limits = c(0, 12)) +
-  xlab('log2(Fold Change)') +
-  ylab('-log10(pvalue)') + 
-  geom_hline(yintercept = -log10(0.05), linetype='dotted', alpha = 0.4) +
-  geom_vline(xintercept = 0, linetype='dotted', alpha = 0.4) +
-  geom_hline(yintercept = -log10(0.05), linetype='dotted', alpha = 0.4) +
-  geom_vline(xintercept = c(-1,0,1), linetype='dotted', alpha = 0.4) + 
-  scale_color_manual(name='', guide = F, values = c('forestgreen','grey')) +
-  ggrepel::geom_text_repel(aes(label = 
-  ifelse(abs(-log10(pval)) > 1.3 & abs(log2fc) > 1.2 & class == 'KRAB', 
-                                        as.character(TX), '')),
-                          box.padding = unit('0.2', 'lines'),
-                          segment.color = 'gray',
-                          color = 'black',
-                          ylim = c(1.3, Inf), size = 4) 
-}
-
-plot.znf.volcano(ha1em.quant)
-plot.znf.volcano(aale.quant)
-```
-
-#### ISG Volcano Plots:
-```{r}
-isg.names <- c('IFI44L', 'DDX58', 'IFIH1', 'MAVS', 'IRF3', 'IRF7', 'IFNL1', 'IRF9', 'STAT1',
-          'IFI27', 'OAS2', 'IFIT3', 'IFIT1', 'OASL', 'ISG15', 'OAS3', 'RSAD2', 'MX1',
-          'OAS1', 'IFI44', 'CH25H', 'IFIT2', 'ISG20', 'RNASEL', 'IFI6')
-
-
-plot.isg.volcano <- function(quant.file) {
-  quant.file <- subset(quant.file, GENE %in% isg.names)
-  ggplot(quant.file, aes(y=-log10(pval),
-                     x=log2fc,
-         color = ifelse(abs(log2fc) > 1 & pval < 0.05, 'not', 'sig'))) +
-    theme(axis.line = element_blank()) + 
-  geom_point(size = 2, alpha = 0.5) + 
-    geom_rug(size = 1, alpha = 0.3, position = 'jitter') + 
-  scale_x_continuous(limits = c(-4, 4)) +
-  scale_y_continuous(limits = c(0, 12)) +
-  xlab('log2(Fold Change)') +
-  ylab('-log10(pvalue)') + 
-  geom_hline(yintercept = -log10(0.05), linetype='dotted', alpha = 0.4) +
-  geom_vline(xintercept = 0, linetype='dotted', alpha = 0.4) +
-  geom_hline(yintercept = -log10(0.05), linetype='dotted', alpha = 0.4) +
-  geom_vline(xintercept = c(-1,0,1), linetype='dotted', alpha = 0.4) + 
-  scale_color_manual(name='', guide = F, values = c('black','grey')) +
-  ggrepel::geom_text_repel(aes(label = 
-  ifelse(abs(-log10(pval)) > 1.3 & abs(log2fc) > 1.5 , 
-                                        as.character(TX), '')),
-                          box.padding = unit('0.5', 'lines'),
-                          segment.color = 'gray',
-                          color = 'black',
-                          ylim = c(0.5, Inf), size = 4)
-} 
-  
-plot.isg.volcano(ha1em.quant)
-plot.isg.volcano(aale.quant)
-
-```
-
-#### lncRNA Volcano Plots:
-```{r}
-lnc.names <- read.delim('data/lnc.names.txt', header = F)
-
-plot.lnc.volcano <- function(quant.file) {
-  quant.file <- subset(quant.file, GENE %in% lnc.names$V1)
-  ggplot(quant.file, aes(y=-log10(pval),
-                     x=log2fc,
-         color = ifelse(abs(log2fc) > 1 & pval < 0.05, 'not', 'sig'))) +
-    theme(axis.line = element_blank()) +
-  geom_point(size = 2, alpha = 0.5) +  
-  geom_rug(size = 1, alpha = 0.3) + 
-  scale_x_continuous(limits = c(-4, 4)) +
-  scale_y_continuous(limits = c(0, 12)) +
-  xlab('log2(Fold Change)') +
-  ylab('-log10(pvalue)') + 
-  geom_hline(yintercept = -log10(0.05), linetype='dotted', alpha = 0.4) +
-  geom_vline(xintercept = 0, linetype='dotted', alpha = 0.4) +
-  geom_hline(yintercept = -log10(0.05), linetype='dotted', alpha = 0.4) +
-  geom_vline(xintercept = c(-1,0,1), linetype='dotted', alpha = 0.4) + 
-  scale_color_manual(name='', guide = F, values = c('black','grey')) +
-  ggrepel::geom_text_repel(aes(label = 
-  ifelse(abs(-log10(pval)) > 1.3 & abs(log2fc) > 1.3 , 
-                                        as.character(TX), '')),
-                          box.padding = unit('0.2', 'lines'),
-                          segment.color = 'gray',
-                          color = 'black',
-                          ylim = c(0, Inf), size = 4)
-} 
-
-plot.lnc.volcano(ha1em.quant)
-plot.lnc.volcano(aale.quant)
-```
-
-#### Chromatin Modifiers Volcano Plots:
-```{r}
-hdac <- c('HDAC1', 'HDAC2', 'HDAC3', 'HDAC4', 'HDAC8', 'HDAC5', 'HDAC6', 'HDAC7', 'HDAC9', 'HDAC10', 'HDAC11', 'SIRT1', 'SIRT2', 'SIRT3', 'SIRT4', 'SIRT5', 'SIRT6', 'SIRT7')
-tet <- c('TET1', 'TET2', 'TET3', 'TET2-AS1', 'TET1P1')
-dnmt <- c('DNMT1', 'DNMT3A', 'DNMT3B', 'DNMT3L')
-kdm <- c('KDM1A', 'KDM1B', 'KDM2A', 'KDM2B', 'KDM3A', 'KDM3B', 'KDM4A', 
-          'KDM4B', 'KDM4C', 'KDM4D', 'KDM4E', 'KDM4F', 'KDM5A', 'KDM5B',
-          'KDM5C', 'KDM5D', 'KDM6A', 'KDM6B', 'KDM7A', 'KDM8')
-
-plot.hdac.volcano <- function(quant.file) {
-  quant.file <- subset(quant.file, GENE %in% hdac)
-  ggplot(quant.file, aes(y=-log10(pval),
-                     x=log2fc,
-         color = ifelse(abs(log2fc) > 1 & pval < 0.05, 'not', 'sig'))) +
-    theme(axis.line = element_blank()) +
-  geom_point(size = 2, alpha = 0.5) +  
-  geom_rug(size = 1, alpha = 0.3) + 
-  scale_x_continuous(limits = c(-4, 4)) +
-  scale_y_continuous(limits = c(0, 12)) +
-  xlab('log2(Fold Change)') +
-  ylab('-log10(pvalue)') + 
-  geom_hline(yintercept = -log10(0.05), linetype='dotted', alpha = 0.4) +
-  geom_vline(xintercept = 0, linetype='dotted', alpha = 0.4) +
-  geom_hline(yintercept = -log10(0.05), linetype='dotted', alpha = 0.4) +
-  geom_vline(xintercept = c(-1,0,1), linetype='dotted', alpha = 0.4) + 
-  scale_color_manual(name='', guide = F, values = c('black','grey')) +
-  ggrepel::geom_text_repel(aes(label = 
-  ifelse(abs(-log10(pval)) > 1.3 & abs(log2fc) > 1.3 , 
-                                        as.character(TX), '')),
-                          box.padding = unit('0.2', 'lines'),
-                          segment.color = 'gray',
-                          color = 'black',
-                          ylim = c(0, Inf), size = 4)
-}
-plot.tet.volcano <- function(quant.file){
-  quant.file <- subset(quant.file, GENE %in% tet)
-  ggplot(quant.file, aes(y=-log10(pval),
-                     x=log2fc,
-         color = ifelse(abs(log2fc) > 1 & pval < 0.05, 'not', 'sig'))) +
-    theme(axis.line = element_blank()) +
-  geom_point(size = 2, alpha = 0.5) +  
-  geom_rug(size = 1, alpha = 0.3) + 
-  scale_x_continuous(limits = c(-4, 4)) +
-  scale_y_continuous(limits = c(0, 12)) +
-  xlab('log2(Fold Change)') +
-  ylab('-log10(pvalue)') + 
-  geom_hline(yintercept = -log10(0.05), linetype='dotted', alpha = 0.4) +
-  geom_vline(xintercept = 0, linetype='dotted', alpha = 0.4) +
-  geom_hline(yintercept = -log10(0.05), linetype='dotted', alpha = 0.4) +
-  geom_vline(xintercept = c(-1,0,1), linetype='dotted', alpha = 0.4) + 
-  scale_color_manual(name='', guide = F, values = c('black','grey')) +
-  ggrepel::geom_text_repel(aes(label = 
-  ifelse(abs(-log10(pval)) > 1.3 & abs(log2fc) > 1.3 , 
-                                        as.character(TX), '')),
-                          box.padding = unit('0.2', 'lines'),
-                          segment.color = 'gray',
-                          color = 'black',
-                          ylim = c(0, Inf), size = 4)
-}
-plot.kdm.volcano <- function(quant.file){
-  quant.file <- subset(quant.file, GENE %in% kdm)
-  ggplot(quant.file, aes(y=-log10(pval),
-                     x=log2fc,
-         color = ifelse(abs(log2fc) > 1 & pval < 0.05, 'not', 'sig'))) +
-    theme(axis.line = element_blank()) +
-  geom_point(size = 2, alpha = 0.5) +  
-  geom_rug(size = 1, alpha = 0.3) + 
-  scale_x_continuous(limits = c(-4, 4)) +
-  scale_y_continuous(limits = c(0, 12)) +
-  xlab('log2(Fold Change)') +
-  ylab('-log10(pvalue)') + 
-  geom_hline(yintercept = -log10(0.05), linetype='dotted', alpha = 0.4) +
-  geom_vline(xintercept = 0, linetype='dotted', alpha = 0.4) +
-  geom_hline(yintercept = -log10(0.05), linetype='dotted', alpha = 0.4) +
-  geom_vline(xintercept = c(-1,0,1), linetype='dotted', alpha = 0.4) + 
-  scale_color_manual(name='', guide = F, values = c('black','grey')) +
-  ggrepel::geom_text_repel(aes(label = 
-  ifelse(abs(-log10(pval)) > 1.3 & abs(log2fc) > 1.3 , 
-                                        as.character(TX), '')),
-                          box.padding = unit('0.2', 'lines'),
-                          segment.color = 'gray',
-                          color = 'black',
-                          ylim = c(0, Inf), size = 4)
-}
-plot.dnmt.volcano <- function(quant.file){
-  quant.file <- subset(quant.file, GENE %in% dnmt)
-  ggplot(quant.file, aes(y=-log10(pval),
-                     x=log2fc,
-         color = ifelse(abs(log2fc) > 1 & pval < 0.05, 'not', 'sig'))) +
-    theme(axis.line = element_blank()) +
-  geom_point(size = 2, alpha = 0.5) +  
-  geom_rug(size = 1, alpha = 0.3) + 
-  scale_x_continuous(limits = c(-4, 4)) +
-  scale_y_continuous(limits = c(0, 12)) +
-  xlab('log2(Fold Change)') +
-  ylab('-log10(pvalue)') + 
-  geom_hline(yintercept = -log10(0.05), linetype='dotted', alpha = 0.4) +
-  geom_vline(xintercept = 0, linetype='dotted', alpha = 0.4) +
-  geom_hline(yintercept = -log10(0.05), linetype='dotted', alpha = 0.4) +
-  geom_vline(xintercept = c(-1,0,1), linetype='dotted', alpha = 0.4) + 
-  scale_color_manual(name='', guide = F, values = c('black','grey')) +
-  ggrepel::geom_text_repel(aes(label = 
-  ifelse(abs(-log10(pval)) > 1.3 & abs(log2fc) > 1 , 
-                                        as.character(TX), '')),
-                          box.padding = unit('0.2', 'lines'),
-                          segment.color = 'gray',
-                          color = 'black',
-                          ylim = c(0, Inf), size = 4)
-  
-} 
-
-
-plot.kdm.volcano(ha1em.quant)
-plot.dnmt.volcano(ha1em.quant)
-plot.hdac.volcano(ha1em.quant)
-plot.tet.volcano(ha1em.quant)
 
 ```
 
 ### DESeqII Output:
 *import DEseq output files*
 ```{r}
-ha1em.de.seq <- read.csv('../data/real.data/ha1em.kras.v.ctrl.de-seq.csv') %>% 
+ha1em.de.seq <- read.csv('../data/bulk.rna.seq/ha1em/output/ha1em.kras.v.ctrl.de-seq.csv') %>% 
   filter(padj < 0.01, padj > 0)
 names(ha1em.de.seq) <- c('Gene', 'baseMean', 'log2fc', 'lfcse', 'pval', 'padj')
-aale.de.seq <- read.csv('data/aale.intra.kras.v.ctrl.de-seq.csv') %>% 
+aale.de.seq <- read.csv('../data/bulk.rna.seq/aale/output/aale.kras.v.ctrl.de-seq.csv') %>% 
   filter(padj < 0.01, padj > 0)
 names(aale.de.seq) <- c('Gene', 'baseMean', 'log2fc', 'lfcse', 'pval', 'padj')
 
@@ -394,19 +111,20 @@ plot.de.volcano <- function(quant.file) {
   geom_hline(yintercept = -log10(0.05), linetype='dotted', alpha = 0.4) +
   geom_vline(xintercept = 0, linetype='dotted', alpha = 0.4) +
   geom_hline(yintercept = -log10(0.05), linetype='dotted', alpha = 0.4) +
-  geom_vline(xintercept = c(-1,0,1), linetype='dotted', alpha = 0.4) + 
-  scale_color_manual(name='', guide = F, values = c('black','grey')) +
-   ggrepel::geom_text_repel(aes(label =
-   ifelse(Gene %in% liu.ifn.signature,
-          as.character(Gene), '')),
-                         segment.color = 'gray',
-                         color = 'black',
-                         ylim = c(1.3, Inf), size = rel(1))
+  geom_vline(xintercept = c(-1,0,1), linetype='dotted', alpha = 0.4) #+ 
+  # scale_color_manual(name='', guide = F, values = c('black','grey')) +
+  #  ggrepel::geom_text_repel(aes(label =
+  #  ifelse(Gene %in% liu.ifn.signature,
+  #         as.character(Gene), '')),
+  #                        segment.color = 'gray',
+  #                        color = 'black',
+  #                        ylim = c(1.3, Inf), size = rel(1))
 }
 
 total.ha1em.de.seq <- plot.de.volcano(ha1em.de.seq)
 total.aale.de.seq <- plot.de.volcano(aale.de.seq)
 total.aale.de.seq
+total.ha1em.de.seq
 ```
 
 #### ZNF Volcano Plots:
@@ -2709,61 +2427,7 @@ dev.off()
 
 ### CTG
 ```{r}
-# cell.Titer <- read.csv('~/Thesis/Projects/KRAS.AALE/AALE.figures/cellTiter.csv', 
-#                       header = FALSE)
-cell.Titer <- read.csv('../data/other/cellTiter.csv', 
-                      header = FALSE)
-colnames(cell.Titer) <- c('background', 'si', '1','2','3','4','5','6','7','8','9')
-kras.v.kras <- t.test(as.numeric(cell.Titer[1, 3:11]),  as.numeric(cell.Titer[2, 3:11]))$p.value
-nc.v.nc <- t.test(as.numeric(cell.Titer[3, 3:11]),  as.numeric(cell.Titer[4, 3:11]))$p.value
-rig.v.rig <- t.test(as.numeric(cell.Titer[5, 3:11]),  as.numeric(cell.Titer[6, 3:11]))$p.value
-mda.v.mda <- t.test(as.numeric(cell.Titer[7, 3:11]),  as.numeric(cell.Titer[8, 3:11]))$p.value
-cell.Titer['M1'] <- rowMeans(cell.Titer[, 3:5])
-cell.Titer['M2'] <- rowMeans(cell.Titer[, 6:8])
-cell.Titer['M3'] <- rowMeans(cell.Titer[, 9:11])
-
-cell.Titer['mean'] <- rowMeans(cell.Titer[, 12:14])
-cell.Titer['sd'] <- apply(cell.Titer[, 12:14],1,sd)
-
-
-
-annoDF <- data.frame(background=c('CTL_pBABE','KRAS_AALE'),
-                     start=c('siCTRL', 'siKRAS', 'siMDA5', 'siRIG-I'),
-                     end=c('siCTRL', 'siKRAS', 'siMDA5', 'siRIG-I'),
-                     y=c(5.135, 2.5, 4.11, 4.385),
-                     label=c('***','***','***', '***'))
-anno2 <- data.frame(background='KRAS_AALE', start=c('siCTRL', 'siCTRL', 'siCTRL'),
-                     end=c('siKRAS', 'siMDA5', 'siRIG-I'),
-                     y=c(5.6, 6.1 ,6.6),
-                     label=c('***','***','***'))
-cell.Titer <- subset(cell.Titer, background == 'KRAS_AALE')
-levels(cell.Titer$si) <- c('siKRAS','siCTRL','siRIG-I', 'siMDA5')
-cell.Titer[1,2] = 'siKRAS'
-cell.Titer[2,2] = 'siCTRL'
-cell.Titer[3,2] = 'siRIG-I'
-cell.Titer[4,2] = 'siMDA5'
-
-titerPlot <- ggplot(cell.Titer) + 
-  geom_bar(aes(x=si, y=mean/1e+06, ymin = mean/1e+06 - sd/1e+06, 
-               ymax = mean/1e+06 + sd/1e+06, fill=si), 
-           stat = 'identity', color='#B0000000', width = .5) + 
-  ylab('Relative Luminescence') + xlab('') +
-  scale_x_discrete(limits=c('siCTRL','siKRAS', 'siMDA5', 'siRIG-I'),expand = c(.1,0))+ 
-  geom_errorbar(aes(x=si, y=mean/1e+06, ymin = mean/1e+06 - sd/1e+06, 
-               ymax = mean/1e+06 + sd/1e+06),
-                position = position_dodge(), width = .3, color='black', size=.75) +
-  geom_signif(data=anno2, 
-              aes(xmin = start, xmax = end, annotations=label, y_position = y), 
-              textsize = rel(2.5), color = 'black',
-              tip_length = c(.1,.1), manual = TRUE) +
-  scale_y_continuous(limits=c(0,7.25), expand = c(0,0)) +
-  #scale_fill_manual(guide=F, values = c("#440154ff", "#31668dff",
-  #                                      "#37b578ff", "#fde725ff")) + 
-  scale_fill_viridis_d(option = 'magma', guide = F) +
-  geom_hline(yintercept = seq(0,4,1), color = 'white')
-
-
-cell.Titer <- read_csv('../data/other/wet.lab/cellTiter.csv', skip = 1, 
+cell.Titer <- read_csv('data/other/wetlab/cellTiter.csv', skip = 1, 
                        col_names = c('background', 'si', '1','2','3','4','5','6','7','8','9'))
 cell.Titer['M1'] <- rowMeans(cell.Titer[, 3:5])
 cell.Titer['M2'] <- rowMeans(cell.Titer[, 6:8])
@@ -2796,15 +2460,8 @@ cell.Titer %>%
   # ggsignif::geom_signif(comparisons = list(c('siCTRL', 'siRIG-I')), 
   #                       test = 't.test', vjust = 0.30) +
   scale_x_discrete(limits=c('siCTRL','siKRAS', 'siMDA5', 'siRIG-I')) + 
-  xlab('')
+  xlab('') + set_my_theme()
                          
-
-
-ggplot(cell.Titer, aes(x=si, y=mean/1e+06, ymin = mean/1e+06 - sd/1e+06, 
-               ymax = mean/1e+06 + sd/1e+06, fill=si)) + 
-  geom_boxplot() 
-
-
 
 titerPlot
 ggsave('../figures/fig.1/ctg.2.5x2.5.pdf', height = 3, width = 3, units = 'in')

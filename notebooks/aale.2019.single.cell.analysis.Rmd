@@ -10,55 +10,46 @@ output:
 #    toc: true
 #    highlight: vignette
 #    toc_depth: 3
+editor_options: 
+  chunk_output_type: console
 --- 
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(root.dir = '/home/rreggiar/notebooks')
+```
+
 ## Figure Code for *insert link here* {.tabset .tabset-fade .tabset-pills}
 ### On board
 ```{r echo=FALSE}
 # Run this cell to load in all packages used in the notebook
 suppressPackageStartupMessages({
 library(tidyverse)
-library(ggsci)
-library(ggpubr)
+#library(ggsci)
+#library(ggpubr)
 library(ggsignif)
 library(ggthemes)
 library(ggrepel)
-library(feather)
-library(cowplot)
 library(ggforce)
 library(SingleCellExperiment)
 library(tximport)
-library(tximeta)
 library(extrafont)
-library(alevinQC)
 library(Seurat)
 library(msigdbr)
-library(GGally)
+#library(GGally)
 library(viridis)
-  library(ggtern)
+#library(ggtern)
+library(patchwork)
 })
 
+
 suppressMessages(loadfonts())
+```
 
-theme_set(theme_classic() + 
-            theme(panel.background = element_rect(fill = 'white'),
-                axis.text = element_text(family = 'Helvetica', size = 6),
-                axis.title = element_text(family = 'Helvetica', size = 6),
-                legend.text = element_text(family = 'Helvetica', size = 6),
-                legend.title = element_text(family = 'Helvetica', size = 6),
-                text = element_text(family = 'Helvetica', size = 6),
-                axis.line = element_blank(),
-                strip.text = element_text(family = 'Helvetica', size = 8, face = 'bold'),
-                strip.background = element_blank()))
+### Figure themes for publication
+```{r echo=FALSE}
 
-
-ifn.signature <- c("DDX58", "IFIH1", "IFNL1", "IRF9", "IFI27", "OAS2", "IFIT3", "IFIT1", "OASL", "ISG15", "OAS3", "RSAD2", "MX1", "OAS1", "IFI44", "CH25H", "IFIT2", "ISG20", "RNASEL", "IFI6", "HERC5", "HERC6", "GBP3", "GBP1", "IRF1", "ISG15")
-
-liu.ifn.signature <- c('ADAR', 'DDX60', 'HERC6', 'IRF7', 'OASL', 'PSM2', 'STAT2', 'TRIM25', 'BST2', 'DHX58', 'IFI35',
-                       'ISG15', 'OGFR', 'RSAD2', 'TDRD7', 'UBE2L6', 'CASP1', 'EIF2AK2', 'IFIH1', 'ISG20', 'PARP12',
-                       'RTP4', 'TRAFD1', 'USP18', 'CMPK2', 'EPSTI1', 'IFIT2', 'MX1', 'PARP14', 'SAMD9L', 'TRIM14',
-                       'CXCL10', 'GBP4', 'IFIT3', 'NMI', 'PNPT1', 'SP110', 'TRIM21')
-
-aale_theme <- theme_set(theme_foundation(base_size = 7, base_family = 'Helvetica') + 
+theme_set(theme_foundation(base_size = 7, base_family = 'Helvetica') + 
             theme(plot.title = element_blank(),
                 panel.background = element_rect(colour = NA),
                 plot.background = element_rect(colour = NA),
@@ -72,64 +63,143 @@ aale_theme <- theme_set(theme_foundation(base_size = 7, base_family = 'Helvetica
                 strip.background = element_blank(),
                 legend.key.size= unit(0.2, "cm"),
                 legend.spacing = unit(0, "cm"),
+                legend.key = element_rect(colour = NA),
                 legend.title = element_text(face="italic"),
                 legend.text = element_text(face = 'bold'),
                 plot.margin=margin(10,5,5,5,unit = "mm"),
                 panel.grid.major = element_blank(),
                 panel.grid.minor = element_blank(),
           ))
+
+set_aale_theme  <- function(){theme_set(theme_foundation(base_size = 7, base_family = 'Helvetica') + 
+            theme(plot.title = element_blank(),
+                panel.background = element_rect(colour = NA),
+                plot.background = element_rect(colour = NA),
+                panel.border = element_rect(colour = NA),
+                axis.title = element_text(face = "bold",size = rel(1)),
+                axis.title.y = element_text(angle=90,vjust =2),
+                axis.title.x = element_text(vjust = -0.2),
+                axis.text = element_text(), 
+                axis.line = element_blank(),
+                strip.text = element_text(),
+                strip.background = element_blank(),
+                legend.key.size= unit(0.2, "cm"),
+                legend.spacing = unit(0, "cm"),
+                legend.key = element_rect(colour = NA),
+                legend.title = element_text(face="italic"),
+                legend.text = element_text(face = 'bold'),
+                plot.margin=margin(10,5,5,5,unit = "mm"),
+                panel.grid.major = element_blank(),
+                panel.grid.minor = element_blank()
+            ))}
+```
+### Gene sets of interest
+```{r echo=FALSE}
+kras.isg.signature <- c("DDX58", "IFIH1", "IFNL1", "IRF9", "IFI27", "OAS2", "IFIT3", "IFIT1", "OASL", "ISG15", "OAS3", "RSAD2", "MX1", "OAS1", "IFI44", "CH25H", "IFIT2", "ISG20", "RNASEL", "IFI6", "HERC5", "HERC6", "GBP3", "GBP1", "IRF1", "ISG15")
+
+liu.isg.signature <- c('ADAR', 'DDX60', 'HERC6', 'IRF7', 'OASL', 'PSM2', 'STAT2', 'TRIM25', 'BST2', 'DHX58', 'IFI35',
+                       'ISG15', 'OGFR', 'RSAD2', 'TDRD7', 'UBE2L6', 'CASP1', 'EIF2AK2', 'IFIH1', 'ISG20', 'PARP12',
+                       'RTP4', 'TRAFD1', 'USP18', 'CMPK2', 'EPSTI1', 'IFIT2', 'MX1', 'PARP14', 'SAMD9L', 'TRIM14',
+                       'CXCL10', 'GBP4', 'IFIT3', 'NMI', 'PNPT1', 'SP110', 'TRIM21')
+
+gs.names = c("KRAS ISG SIGNATURE" , 
+             "LIU ISG SIGNATURE" ,
+             'HALLMARK IFNA RESPONSE',
+             'HALLMARK IFNG RESPONSE',
+             'HALLMARK KRAS UP')
+
+rig.i.mda5.induction <- 
+  msigdbr(species = 'Homo sapiens') %>% 
+  subset(grepl('REACTOME_DDX58', gs_name)) %>% 
+  mutate(gs_name = 'RIG_I_MDA5_INDUCTION') %>% 
+  select(gene_symbol) %>% 
+  unlist() %>% 
+  unname()
+
+rig.i.mda5.neg.regulation <- 
+  msigdbr(species = 'Homo sapiens') %>% 
+  subset(grepl('OF_DDX58', gs_name)) %>% 
+  mutate(gs_name = 'RIG_I_MDA5_NEG_REGULATION') %>% 
+  select(gene_symbol) %>% 
+  unlist() %>% 
+  unname()
+
+msig.df.h.ifng <- 
+  msigdbr(species = 'Homo sapiens', category = 'H') %>% 
+  subset(grepl('_GAMMA_RESPONSE', gs_name)) %>% 
+  mutate(gs_name = 'HALLMARK_IFNG_RESPONSE') %>% 
+  select(gene_symbol) %>% 
+  unlist() %>% 
+  unname()
+
+msig.df.h.ifna <- 
+  msigdbr(species = 'Homo sapiens', category = 'H') %>% 
+  subset(grepl('_ALPHA_RESPONSE', gs_name)) %>% 
+  mutate(gs_name = 'HALLMARK_IFNA_RESPONSE') %>% 
+  select(gene_symbol) %>% 
+  unlist() %>% 
+  unname()
+
+kras.signal.up <- 
+  msigdbr(species = 'Homo sapiens') %>% 
+  filter(gs_name == 'HALLMARK_KRAS_SIGNALING_UP')  %>% 
+  select(gene_symbol) %>% 
+  unlist() %>% 
+  unname()
+
 ```
 
 ### Suerat and Alevin implementation
 ```{r}
-#files <- file.path('../data/for.sce.salmon.14.k.31.gencode.mtx.dump/alevin/quants_mat.gz')
+set.seed(431)
+
 files <- 
-  file.path('../data/for.sce.alevin.te.gencode.combine.k.31.no.dups.out/KRAS/alevin/quants_mat.gz')
+  file.path('data/single.cell.rna.seq/output/gencode.te.locus.v.1.index.alevin.out/alevin/quants_mat.gz')
 file.exists(files)
+
 txi <- tximport(files, type="alevin")
 
 kras.aale.sc <- CreateSeuratObject(counts = txi$counts, min.cells = 3, 
                                    min.features = 200, project = "KRAS.AALE")
 
-#ctrl.aale.sc <- CreateSeuratObject(counts = alevin.ctrl.out, min.cells = 3, min.features = 200, project = "CTRL.AALE")
-#kras.aale.sc <- merge(kras.aale.sc, ctrl.aale.sc, add.cell.ids=c('KRAS', 'CTRL'))
-
 kras.aale.sc[["percent.mt"]] <- PercentageFeatureSet(kras.aale.sc, pattern = "^MT-")
 kras.aale.sc[["percent.rp"]] <- PercentageFeatureSet(kras.aale.sc, pattern = '^RP')
 
-VlnPlot(kras.aale.sc, features = c("nFeature_RNA", "nCount_RNA", "percent.mt", 'percent.rp'), ncol = 3)
-
+VlnPlot(kras.aale.sc, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"))
 plot1 <- FeatureScatter(kras.aale.sc, feature1 = "nCount_RNA", feature2 = "percent.mt")
 plot2 <- FeatureScatter(kras.aale.sc, feature1 = "nCount_RNA", feature2 = "nFeature_RNA")
 plot3 <- FeatureScatter(kras.aale.sc, feature1 = "nCount_RNA", feature2 = "percent.rp")
 CombinePlots(plots = list(plot1, plot2, plot3))
 
 kras.aale.sc <- subset(kras.aale.sc, 
-                       subset = nFeature_RNA > 800  & percent.mt < 5) # & nFeature_RNA < 6000
-kras.aale.sc
+                       subset = nFeature_RNA >= 2000  & 
+                         percent.mt < 5 & 
+                         nFeature_RNA <= 7000)
+
 kras.aale.sc <- NormalizeData(kras.aale.sc, 
                               normalization.method = "LogNormalize", scale.factor = 10000)
 
 kras.aale.sc <- FindVariableFeatures(kras.aale.sc, selection.method = "vst", nfeatures = 500)
 
-# Identify the 10 most highly variable genes
-top10 <- head(VariableFeatures(kras.aale.sc), 10)
-top10
-# plot variable features with and without labels
-plot1 <- VariableFeaturePlot(kras.aale.sc)
-plot2 <- LabelPoints(plot = plot1, points = top10, repel = TRUE)
-#CombinePlots(plots = list(plot1, plot2))
-plot2
+# # Identify the 10 most highly variable genes
+# top10 <- head(VariableFeatures(kras.aale.sc), 10)
+# top10
+# # plot variable features with and without labels
+# plot1 <- VariableFeaturePlot(kras.aale.sc)
+# plot2 <- LabelPoints(plot = plot1, points = top10, repel = TRUE)
+# #CombinePlots(plots = list(plot1, plot2))
+# plot2
+
 all.genes <- rownames(kras.aale.sc)
 kras.aale.sc <- ScaleData(kras.aale.sc, features = all.genes)
 kras.aale.sc <- RunPCA(kras.aale.sc, features = VariableFeatures(object = kras.aale.sc))
 
 # Examine and visualize PCA results a few different ways
-print(kras.aale.sc[["pca"]], dims = 1:5, nfeatures = 5)
-VizDimLoadings(kras.aale.sc, dims = 1:5, reduction = "pca")
-DimPlot(kras.aale.sc, reduction = "pca")
+#print(kras.aale.sc[["pca"]], dims = 1:5, nfeatures = 5)
+#VizDimLoadings(kras.aale.sc, dims = 1:5, reduction = "pca")
+#DimPlot(kras.aale.sc, reduction = "pca")
 
-DimHeatmap(kras.aale.sc, dims = 1:4, cells = 10000, balanced = TRUE)
+#DimHeatmap(kras.aale.sc, dims = 1:4, cells = 10000, balanced = TRUE)
 
 kras.aale.sc <- JackStraw(kras.aale.sc, num.replicate = 100)
 kras.aale.sc <- ScoreJackStraw(kras.aale.sc, dims = 1:20)
@@ -139,7 +209,7 @@ JackStrawPlot(kras.aale.sc, dims = 1:20)
 ElbowPlot(kras.aale.sc)
 
 kras.aale.sc <- FindNeighbors(kras.aale.sc, dims = 1:10)
-kras.aale.sc <- FindClusters(kras.aale.sc, resolution = 0.8)
+kras.aale.sc <- FindClusters(kras.aale.sc, resolution = 0.6)
 
 # If you haven't installed UMAP, you can do so via reticulate::py_install(packages ='umap-learn')
 kras.aale.sc <- RunUMAP(kras.aale.sc, dims = 1:10)
@@ -147,7 +217,7 @@ kras.aale.sc <- RunUMAP(kras.aale.sc, dims = 1:10)
 # individual clusters
 DimPlot(kras.aale.sc, 
         reduction = "umap", 
-        pt.size = .42,  
+        pt.size = 2.42,  
         cols = c(viridis(12, option = 'plasma')[1],
                  viridis(12, option = 'inferno')[2],
                  viridis(12, option = 'D')[5],
@@ -155,75 +225,26 @@ DimPlot(kras.aale.sc,
                  viridis(12, option = 'inferno')[9],
                  viridis(12, option = 'D')[11],
                  viridis(12, option = 'magma')[6],
-                 viridis(12, option = 'magma')[3])) +
-theme_set(theme_foundation(base_size = 7, base_family = 'Helvetica') + 
-            theme(plot.title = element_blank(),
-                panel.background = element_rect(colour = NA),
-                plot.background = element_rect(colour = NA),
-                panel.border = element_rect(colour = NA),
-                axis.title = element_text(face = "bold",size = rel(1)),
-                axis.title.y = element_text(angle=90,vjust =2),
-                axis.title.x = element_text(vjust = -0.2),
-                axis.text = element_text(), 
-                axis.line = element_blank(),
-                strip.text = element_text(),
-                strip.background = element_blank(),
-                legend.key.size= unit(0.2, "cm"),
-                legend.spacing = unit(0, "cm"),
-                legend.title = element_text(face="italic"),
-                legend.text = element_text(face = 'bold'),
-                plot.margin=margin(10,5,5,5,unit = "mm"),
-                panel.grid.major = element_blank(),
-                panel.grid.minor = element_blank(),
-          ))
+                 viridis(12, option = 'magma')[3])) + 
+  set_aale_theme()
 
-ggsave('../Figures/fig.1/umap.sc.2.5x2.5.pdf', height = 2.5, width = 2.5, units = 'in')
+#ggsave('../Figures/fig.1/umap.sc.2.5x2.5.pdf', height = 2.5, width = 2.5, units = 'in')
 
-FeaturePlot(kras.aale.sc, features = cluster.5.features, pt.size = .42) +
-theme_set(theme_foundation(base_size = 7, base_family = 'Helvetica') + 
-            theme(plot.title = element_blank(),
-                panel.background = element_rect(colour = NA),
-                plot.background = element_rect(colour = NA),
-                panel.border = element_rect(colour = NA),
-                axis.title = element_text(face = "bold",size = rel(1)),
-                axis.title.y = element_text(angle=90,vjust =2),
-                axis.title.x = element_text(vjust = -0.2),
-                axis.text = element_text(), 
-                axis.line = element_blank(),
-                strip.text = element_text(),
-                strip.background = element_blank(),
-                legend.key.size= unit(0.2, "cm"),
-                legend.spacing = unit(0, "cm"),
-                legend.title = element_text(face="italic"),
-                legend.text = element_text(face = 'bold'),
-                plot.margin=margin(10,5,5,5,unit = "mm"),
-                panel.grid.major = element_blank(),
-                panel.grid.minor = element_blank(),
-          ))
+FeaturePlot(kras.aale.sc, features = 'ISG15', pt.size = 2.42) + 
+  set_aale_theme()
 
-VlnPlot(kras.aale.sc, features = c("ISG20", "IFI27", "IFIT3", 'IRF9', 'IRF3'), ncol = 3)
+VlnPlot(kras.aale.sc, features = c("ISG20", "IFI27", "ISG15", 'IRF9', 'IRF3'), ncol = 3)
 
 
-DoHeatmap(subset(kras.aale.sc, downsample = 100), 
-          features = c('IRF9','ZNF382', 'IRF3', 'ETV1'), 
-          size = 1, draw.lines = T) +
-  theme_classic() + 
-            theme(panel.background = element_rect(fill = 'white'),
-                axis.text = element_text(family = 'Helvetica', size = 6),
-                axis.title = element_text(family = 'Helvetica', size = 6),
-                legend.text = element_text(family = 'Helvetica', size = 6),
-                legend.title = element_text(family = 'Helvetica', size = 6),
-                axis.line = element_blank(),
-                strip.text = element_text(family = 'Helvetica', size = 8, 
-                                          face = 'bold'),
-                strip.background = element_blank(),
-                axis.text.x = element_blank(),
-                axis.ticks.x = element_blank())
+# DoHeatmap(subset(kras.aale.sc, downsample = 100), 
+#           features = c('IRF9','ZNF382', 'IRF3', 'ETV1'), 
+#           size = 1, draw.lines = T)
 #FeaturePlot(kras.aale.sc, features = cyto.gene.set$V1)
  
 
 kras.aale.sc.markers <- 
-  FindAllMarkers(kras.aale.sc, only.pos = TRUE, min.pct = 0.25, logfc.threshold = 0.25)
+  FindAllMarkers(kras.aale.sc, only.pos = F, min.pct = 0.25, logfc.threshold = 0.25) %>% 
+  filter(p_val_adj < 0.01)
 kras.aale.sc.markers %>% group_by(cluster) %>% top_n(n = 10, wt = avg_logFC)
 
 kras.aale.sc.markers %>% group_by(cluster) %>% top_n(n = 10, wt = avg_logFC) %>% 
@@ -244,9 +265,6 @@ kras.aale.sc.markers %>% group_by(cluster) %>% top_n(n = 10, wt = avg_logFC) %>%
   merge(aale.de.seq, by.x = 'gene', by.y = 'Gene') %>% 
   ggplot(aes(avg_logFC, log2fc)) + 
   geom_point()
-  
-  
-  
   
 ggsave('../Figures/fig.1/clust.5.bar.2.5x1.5.pdf', height = 2.5, width = 1.5, units = 'in')
 
@@ -558,60 +576,31 @@ alusx.cor.cluster
 
 ### Plotting normalized abundance of 'metagenes'
 ```{r}
-gs.names = c("KRAS ISG SIGNATURE" , 
-             "LIU ISG SIGNATURE" ,
-             'HALLMARK IFNA RESPONSE',
-             'HALLMARK IFNG RESPONSE',
-             'HALLMARK KRAS UP')
+gene.set.kras.aale.sc <- kras.aale.sc  
 
-rig.i.mda5.induction <- 
-  msigdbr(species = 'Homo sapiens') %>% 
-  subset(grepl('MDA5', gs_name))
+add.gene.set.to.sc <- function(gene.set, name){
+  gene.set <- 
+    rownames(gene.set.kras.aale.sc[['RNA']]@data)[rownames(gene.set.kras.aale.sc[['RNA']]@data) %in% gene.set]
+  
+  # Get mean expression of genes of interest per cell
+  mean.exp <- 
+    colMeans(x = gene.set.kras.aale.sc[['RNA']]@data[rownames(gene.set.kras.aale.sc[['RNA']]@scale.data) %in% gene.set,], na.rm = TRUE)
+  
+  # Add mean expression values in 'object@meta.data$gene.set.score'
+  name <- deparse(substitute(name))
+  gene.set.kras.aale.sc@meta.data[, `name`] <- mean.exp 
+  return(gene.set.kras.aale.sc)
+}
 
-msig.df.h.ifng <- 
-  msigdbr(species = 'Homo sapiens', category = 'H') %>% 
-  subset(grepl('_GAMMA_RESPONSE', gs_name)) %>% 
-  mutate(gs_name = 'HALLMARK_IFNG_RESPONSE') %>% 
-  select(gene_symbol) %>% 
-  unlist()
+gene.set.kras.aale.sc <- add.gene.set.to.sc(liu.isg.signature, `liu.isg.signature`)
+gene.set.kras.aale.sc <- add.gene.set.to.sc(kras.isg.signature, `kras.isg.signature`)
+gene.set.kras.aale.sc <- add.gene.set.to.sc(msig.df.h.ifna, `msig.df.h.ifna`)
+gene.set.kras.aale.sc <- add.gene.set.to.sc(msig.df.h.ifng, `msig.df.h.ifng`)
+gene.set.kras.aale.sc <- add.gene.set.to.sc(kras.signal.up, `kras.signal.up`)
+gene.set.kras.aale.sc <- add.gene.set.to.sc(rig.i.mda5.induction, `rig.i.mda5.induction`)
+gene.set.kras.aale.sc <- add.gene.set.to.sc(rig.i.mda5.neg.regulation, `rig.i.mda5.neg.regulation`)
 
-msig.df.h.ifna <- 
-  msigdbr(species = 'Homo sapiens', category = 'H') %>% 
-  subset(grepl('_ALPHA_RESPONSE', gs_name)) %>% 
-  mutate(gs_name = 'HALLMARK_IFNA_RESPONSE') %>% 
-  select(gene_symbol) %>% 
-  unlist()
-
-kras.signal.up <- 
-  msigdbr(species = 'Homo sapiens') %>% 
-  filter(gs_name == 'HALLMARK_KRAS_SIGNALING_UP')  %>% 
-  select(gene_symbol) %>% 
-  unlist()
-
-# gene.set.kras.aale.sc <- kras.aale.sc  
-gene.set <- 
-  rownames(gene.set.kras.aale.sc[['RNA']]@data)[rownames(gene.set.kras.aale.sc[['RNA']]@data) %in% cluster.5.features]
-
-# Get mean expression of genes of interest per cell
-mean.exp <- 
-  colMeans(x = gene.set.kras.aale.sc[['RNA']]@data[rownames(gene.set.kras.aale.sc[['RNA']]@scale.data) %in%
-                                                     cluster.5.features,], na.rm = TRUE)
-
-# Add mean expression values in 'object@meta.data$gene.set.score'
-gene.set.kras.aale.sc@meta.data$cluster.5.features <- mean.exp
-
-
-kras.sig.vln <- VlnPlot(gene.set.kras.aale.sc, 
-        features = c('kras.signal.up'), 
-        nrow = 1,pt.size = 0, size = 0.5, 
-        cols = c(viridis(12, option = 'plasma')[1],
-                 viridis(12, option = 'inferno')[2],
-                 viridis(12, option = 'D')[5],
-                 viridis(12, option = 'plasma')[7],
-                 viridis(12, option = 'inferno')[9],
-                 viridis(12, option = 'D')[11])) + 
-  xlab('') +
-theme_set(theme_foundation(base_size = 7, base_family = 'Helvetica') + 
+vln_theme <- function() {theme_set(theme_foundation(base_size = 7, base_family = 'Helvetica') + 
             theme(plot.title = element_blank(),
                 panel.background = element_rect(colour = NA),
                 plot.background = element_rect(colour = NA),
@@ -632,138 +621,41 @@ theme_set(theme_foundation(base_size = 7, base_family = 'Helvetica') +
                 panel.grid.minor = element_blank(),
                 legend.position = 'NA'
           ))
-hifna.sig.vln <- VlnPlot(gene.set.kras.aale.sc, 
-        features = c('msig.df.h.ifna'), 
-        nrow = 1,pt.size = 0, size = 0.5, 
+}
+
+make.gene.set.vln <- function(name){
+  
+  name <- deparse(substitute(name))
+
+  return(VlnPlot(gene.set.kras.aale.sc, 
+        features = `name`, 
+        nrow = 1, pt.size = 0, size = 0.5, 
         cols = c(viridis(12, option = 'plasma')[1],
                  viridis(12, option = 'inferno')[2],
                  viridis(12, option = 'D')[5],
                  viridis(12, option = 'plasma')[7],
                  viridis(12, option = 'inferno')[9],
                  viridis(12, option = 'D')[11])) + 
-  xlab('') +
-theme_set(theme_foundation(base_size = 7, base_family = 'Helvetica') + 
-            theme(plot.title = element_blank(),
-                panel.background = element_rect(colour = NA),
-                plot.background = element_rect(colour = NA),
-                panel.border = element_rect(colour = NA),
-                axis.title = element_text(face = "bold",size = rel(1)),
-                axis.title.y = element_text(angle=90,vjust =2),
-                axis.title.x = element_blank(),
-                axis.text = element_text(), 
-                axis.line = element_blank(),
-                strip.text = element_text(),
-                strip.background = element_blank(),
-                legend.key.size= unit(0.2, "cm"),
-                legend.spacing = unit(0, "cm"),
-                legend.title = element_text(face="italic"),
-                legend.text = element_text(face = 'bold'),
-                plot.margin=margin(10,5,5,5,unit = "mm"),
-                panel.grid.major = element_blank(),
-                panel.grid.minor = element_blank(),
-                legend.position = 'NA'
-          ))
-hifng.sig.vln <- VlnPlot(gene.set.kras.aale.sc, 
-        features = c('msig.df.h.ifng'), 
-        nrow = 1,pt.size = 0, size = 0.5, 
-        cols = c(viridis(12, option = 'plasma')[1],
-                 viridis(12, option = 'inferno')[2],
-                 viridis(12, option = 'D')[5],
-                 viridis(12, option = 'plasma')[7],
-                 viridis(12, option = 'inferno')[9],
-                 viridis(12, option = 'D')[11])) + 
-  xlab('') +
-theme_set(theme_foundation(base_size = 7, base_family = 'Helvetica') + 
-            theme(plot.title = element_blank(),
-                panel.background = element_rect(colour = NA),
-                plot.background = element_rect(colour = NA),
-                panel.border = element_rect(colour = NA),
-                axis.title = element_text(face = "bold",size = rel(1)),
-                axis.title.y = element_text(angle=90,vjust =2),
-                axis.title.x = element_blank(),
-                axis.text = element_text(), 
-                axis.line = element_blank(),
-                strip.text = element_text(),
-                strip.background = element_blank(),
-                legend.key.size= unit(0.2, "cm"),
-                legend.spacing = unit(0, "cm"),
-                legend.title = element_text(face="italic"),
-                legend.text = element_text(face = 'bold'),
-                plot.margin=margin(10,5,5,5,unit = "mm"),
-                panel.grid.major = element_blank(),
-                panel.grid.minor = element_blank(),
-                legend.position = 'NA'
-          ))
-ifn.sig.vln <- VlnPlot(gene.set.kras.aale.sc, 
-        features = c('ifn.signature'), 
-        nrow = 1,pt.size = 0, size = 0.5, 
-        cols = c(viridis(12, option = 'plasma')[1],
-                 viridis(12, option = 'inferno')[2],
-                 viridis(12, option = 'D')[5],
-                 viridis(12, option = 'plasma')[7],
-                 viridis(12, option = 'inferno')[9],
-                 viridis(12, option = 'D')[11])) + 
-  xlab('') +
-theme_set(theme_foundation(base_size = 7, base_family = 'Helvetica') + 
-            theme(plot.title = element_blank(),
-                panel.background = element_rect(colour = NA),
-                plot.background = element_rect(colour = NA),
-                panel.border = element_rect(colour = NA),
-                axis.title = element_text(face = "bold",size = rel(1)),
-                axis.title.y = element_text(angle=90,vjust =2),
-                axis.title.x = element_blank(),
-                axis.text = element_text(), 
-                axis.line = element_blank(),
-                strip.text = element_text(),
-                strip.background = element_blank(),
-                legend.key.size= unit(0.2, "cm"),
-                legend.spacing = unit(0, "cm"),
-                legend.title = element_text(face="italic"),
-                legend.text = element_text(face = 'bold'),
-                plot.margin=margin(10,5,5,5,unit = "mm"),
-                panel.grid.major = element_blank(),
-                panel.grid.minor = element_blank(),
-                legend.position = 'NA'
-          ))
+  xlab('') + 
+    vln_theme() + 
+    theme(plot.margin = unit(c(0, 0, 0, 0), "cm")))
 
-liu.sig.vln <- VlnPlot(gene.set.kras.aale.sc, 
-        features = c('liu.ifn.signature'), 
-        nrow = 1,pt.size = 0, size = 0.5, 
-        cols = c(viridis(12, option = 'plasma')[1],
-                 viridis(12, option = 'inferno')[2],
-                 viridis(12, option = 'D')[5],
-                 viridis(12, option = 'plasma')[7],
-                 viridis(12, option = 'inferno')[9],
-                 viridis(12, option = 'D')[11])) + 
-  xlab('') +
-theme_set(theme_foundation(base_size = 7, base_family = 'Helvetica') + 
-            theme(plot.title = element_blank(),
-                panel.background = element_rect(colour = NA),
-                plot.background = element_rect(colour = NA),
-                panel.border = element_rect(colour = NA),
-                axis.title = element_text(face = "bold",size = rel(1)),
-                axis.title.y = element_text(angle=90,vjust =2),
-                axis.title.x = element_blank(),
-                axis.text = element_text(), 
-                axis.line = element_blank(),
-                strip.text = element_text(),
-                strip.background = element_blank(),
-                legend.key.size= unit(0.2, "cm"),
-                legend.spacing = unit(0, "cm"),
-                legend.title = element_text(face="italic"),
-                legend.text = element_text(face = 'bold'),
-                plot.margin=margin(10,5,5,5,unit = "mm"),
-                panel.grid.major = element_blank(),
-                panel.grid.minor = element_blank(),
-                legend.position = 'NA'
-          ))
-# scale_y_continuous(limits = c(-0.1, max(gene.set.kras.aale.sc@meta.data$liu.ifn.signature) ),
-  #                    breaks = max(gene.set.kras.aale.sc@meta.data$liu.ifn.signature)) + xlab('cluster') +
-  #theme(legend.position = 'NA')
+}
 
+liu.isg.vln <- make.gene.set.vln(`liu.isg.signature`)
+kras.isg.vln <- make.gene.set.vln(`kras.isg.signature`)
+msig.df.h.ifna.vln <- make.gene.set.vln(`msig.df.h.ifna`)
+msig.df.h.ifng.vln <- make.gene.set.vln(`msig.df.h.ifng`)
+kras.signal.up.vln <- make.gene.set.vln(`kras.signal.up`)
+rig.i.mda5.induction.vln <- make.gene.set.vln(`rig.i.mda5.induction`)
+rig.i.mda5.neg.regulation.vln <- make.gene.set.vln(`rig.i.mda5.neg.regulation`)
 
+patchwork::wrap_plots(list(liu.isg.vln, kras.isg.vln))
 
-patchwork::wrap_plots(list(kras.sig.vln, hifna.sig.vln, ifn.sig.vln, liu.sig.vln), ncol = 2, guides = 'collect')
+rig.i.mda5.induction.vln
+  
+rig.i.mda5.neg.regulation.vln
+
 
 ggsave('../Figures/fig.1/stacked.vln.3x4.pdf', height = 3, width = 4, units = 'in')
 
@@ -777,28 +669,7 @@ ddx58.vln <- VlnPlot(gene.set.kras.aale.sc,
                  viridis(12, option = 'plasma')[7],
                  viridis(12, option = 'inferno')[9],
                  viridis(12, option = 'D')[11])) + 
-  xlab('') +
-theme_set(theme_foundation(base_size = 7, base_family = 'Helvetica') + 
-            theme(plot.title = element_blank(),
-                panel.background = element_rect(colour = NA),
-                plot.background = element_rect(colour = NA),
-                panel.border = element_rect(colour = NA),
-                axis.title = element_text(face = "bold",size = rel(1)),
-                axis.title.y = element_text(angle=90,vjust =2),
-                axis.title.x = element_blank(),
-                axis.text = element_text(), 
-                axis.line = element_blank(),
-                strip.text = element_text(),
-                strip.background = element_blank(),
-                legend.key.size= unit(0.2, "cm"),
-                legend.spacing = unit(0, "cm"),
-                legend.title = element_text(face="italic"),
-                legend.text = element_text(face = 'bold'),
-                plot.margin=margin(10,5,5,5,unit = "mm"),
-                panel.grid.major = element_blank(),
-                panel.grid.minor = element_blank(),
-                legend.position = 'NA'
-          ))
+  xlab('') + set_aale_theme()
 
 ifih1.vln <- VlnPlot(gene.set.kras.aale.sc, 
         features = c('AluY'), 
@@ -809,28 +680,7 @@ ifih1.vln <- VlnPlot(gene.set.kras.aale.sc,
                  viridis(12, option = 'plasma')[7],
                  viridis(12, option = 'inferno')[9],
                  viridis(12, option = 'D')[11])) + 
-  xlab('') +
-theme_set(theme_foundation(base_size = 7, base_family = 'Helvetica') + 
-            theme(plot.title = element_blank(),
-                panel.background = element_rect(colour = NA),
-                plot.background = element_rect(colour = NA),
-                panel.border = element_rect(colour = NA),
-                axis.title = element_text(face = "bold",size = rel(1)),
-                axis.title.y = element_text(angle=90,vjust =2),
-                axis.title.x = element_blank(),
-                axis.text = element_text(), 
-                axis.line = element_blank(),
-                strip.text = element_text(),
-                strip.background = element_blank(),
-                legend.key.size= unit(0.2, "cm"),
-                legend.spacing = unit(0, "cm"),
-                legend.title = element_text(face="italic"),
-                legend.text = element_text(face = 'bold'),
-                plot.margin=margin(10,5,5,5,unit = "mm"),
-                panel.grid.major = element_blank(),
-                panel.grid.minor = element_blank(),
-                legend.position = 'NA'
-          ))
+  xlab('') + set_aale_theme()
 
 patchwork::wrap_plots(list(ddx58.vln, ifih1.vln), ncol = 2, guides = 'collect')
 
@@ -838,6 +688,8 @@ ggsave('../Figures/fig.1/dsRNA.sc.vln.3x4.pdf', height = 2.5, width = 3.5, units
 
 test.mtx <- as.matrix(mean.exp)
 colnames(test.mtx) <- 'DER.IFN.GAMMA.UP'
+
+
 
 t(test.mtx)
 
@@ -865,30 +717,11 @@ DoHeatmap(subset(gene.set.kras.aale.sc, downsample = 100),
 FeaturePlot(gene.set.kras.aale.sc, 
             features = c('msig.df.h.ifng'), 
             pt.size = .42, sort.cell = T,
-            cols = c(viridis(2, direction = -1))) +
-theme_set(theme_foundation(base_size = 7, base_family = 'Helvetica') + 
-            theme(plot.title = element_blank(),
-                panel.background = element_rect(colour = NA),
-                plot.background = element_rect(colour = NA),
-                panel.border = element_rect(colour = NA),
-                axis.title = element_text(face = "bold",size = rel(1)),
-                axis.title.y = element_text(angle=90,vjust =2),
-                axis.title.x = element_text(vjust = -0.2),
-                axis.text = element_text(), 
-                axis.line = element_blank(),
-                strip.text = element_text(),
-                strip.background = element_blank(),
-                legend.key.size= unit(0.2, "cm"),
-                legend.spacing = unit(0, "cm"),
-                legend.title = element_text(face="italic"),
-                legend.text = element_text(face = 'bold'),
-                plot.margin=margin(10,5,5,5,unit = "mm"),
-                panel.grid.major = element_blank(),
-                panel.grid.minor = element_blank(),
-          ))
+            cols = c(viridis(2, direction = -1))) + set_aale_theme()
 
 ggsave('../Figures/fig.1/hifng.sc.2.5x2.pdf', height = 2.5, width = 2, units = 'in')
 ```
+
 #### RIG-I vs. MDA5
 ```{r}
 kras.aale.sc.norm.counts.receptor.scatter <- 
