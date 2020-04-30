@@ -1,0 +1,846 @@
+---
+title: "KRAS AALE Manuscript code 2020"
+author: 'Roman E. Reggiardo'
+date: '04/29/2020'
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+# Setup:
+## installs
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(root.dir = '.')
+```
+## loading
+```{r}
+suppressPackageStartupMessages({
+  library(tidyverse)
+  library(ggsci)
+  library(ggpubr)
+  library(ggsignif)
+  library(ggthemes) 
+  library(ggrepel)
+  library(ggforce)
+  library(extrafont)
+  library(matrixStats)
+  library(ggrepel)
+  library(pheatmap)
+  library(viridis)
+  library(VennDiagram)
+  library(stringr)
+  library(patchwork)
+  library(fgsea)
+  library(Hmisc)
+  library(SingleCellExperiment)
+  library(tximport)
+  library(Seurat)
+})
+suppressMessages(loadfonts())
+```
+## setting ggplot theme
+```{r}
+theme_set(theme_foundation(base_size = 7, base_family = 'Helvetica') + 
+            theme(plot.title = element_blank(),
+                panel.background = element_rect(colour = NA),
+                plot.background = element_rect(colour = NA),
+                panel.border = element_rect(colour = NA),
+                axis.title = element_text(face = "bold",size = rel(1)),
+                axis.title.y = element_text(angle=90,vjust =2),
+                axis.title.x = element_text(vjust = -0.2),
+                axis.text = element_text(), 
+                axis.line = element_blank(),
+                strip.text = element_text(),
+                strip.background = element_blank(),
+                legend.key.size= unit(0.2, "cm"),
+                legend.spacing = unit(0, "cm"),
+                legend.key = element_rect(colour = NA),
+                legend.title = element_text(face="italic"),
+                legend.text = element_text(face = 'bold'),
+                plot.margin=margin(2,2,2,2,unit = "mm"),
+                panel.grid.major = element_blank(),
+                panel.grid.minor = element_blank(),
+          ))
+
+set_aale_theme  <- function(){theme_set(theme_foundation(base_size = 7, base_family = 'Helvetica') + 
+            theme(plot.title = element_blank(),
+                panel.background = element_rect(colour = NA),
+                plot.background = element_rect(colour = NA),
+                panel.border = element_rect(colour = NA),
+                axis.title = element_text(face = "bold",size = rel(1)),
+                axis.title.y = element_text(angle=90,vjust =2),
+                axis.title.x = element_text(vjust = -0.2),
+                axis.text = element_text(), 
+                axis.line = element_blank(),
+                strip.text = element_text(),
+                strip.background = element_blank(),
+                legend.key.size= unit(0.2, "cm"),
+                legend.spacing = unit(0, "cm"),
+                legend.key = element_rect(colour = NA),
+                legend.title = element_text(face="italic"),
+                legend.text = element_text(face = 'bold'),
+                plot.margin=margin(2,2,2,2,unit = "mm"),
+                panel.grid.major = element_blank(),
+                panel.grid.minor = element_blank()
+            ))}
+```
+## figure dirs, and other globally relevant constants
+```{r}
+figure.dir.1 <-  '/home/rreggiar/figures'
+homer.dir <- 'data/atac.seq/output/atac-seq-pipeline/analysis/homer.annotations/'
+atac.dir <- 'data/atac.seq/output/atac-seq-pipeline/analysis/'
+
+chr.order <- c('chr1', 'chr2', 'chr3', 
+               'chr4', 'chr5', 'chr6', 
+               'chr7', 'chr8', 'chr9',
+               'chr10', 'chr11', 'chr12', 
+               'chr13', 'chr14', 'chr15', 
+               'chr16', 'chr17',
+               'chr18', 'chr19', 'chr20', 
+               'chr21', 'chr22', 'chrX', 'chrY')
+
+chr.19.bins <- data.frame(chr = 'chr19',
+                          bin = c('p13.3', 'p13.2', 'p13.13', 'p13.12', 'p13.11',
+                                  'p12', 'q12', 'q13.11', 'q13.12', 'q13.13',
+                                  'q13.2', 'q13.31', 'q13.32', 'q13.33', 'q13.41', 'q13.42',
+                                  'q13.43'),
+                          start = c(1, 6900001, 12600001, 13800001, 16100001, 19900001,
+                                    28100001, 31900001, 35100001, 37800001, 38200001, 
+                                    42900001, 44700001, 47500001, 50900001, 53100001,
+                                    55800001),
+                          end = c(6900000, 12600000, 13800000, 16100000, 19900000,
+                                    28100000, 31900000, 35100000, 37800000, 38200000, 
+                                    42900000, 44700000, 47500000, 50900000, 53100000,
+                                    55800000, 58617616))
+
+
+zscan18.row <- 
+  tibble('gene' = 'ZSCAN18', 'biotype' = 'protein_coding', 'ensg' = 'placehold',
+                       'chr' = 19, 'start' = 58083839, 
+         'end' = 58098210,  'strand' = '-', 'anno' ='SCAN-ZNF')
+
+trono.de.krab.znfs <- read_csv('data/other/wetlab/all.human.znf.trono.db.csv',
+                            col_names = c('gene', 'biotype', 'ensg', 'chr', 
+                                          'start', 'end', 'strand', 'anno')) %>% 
+  mutate(anno = gsub('s','', anno),
+         anno = gsub('[(]', '', anno),
+         anno = gsub('[)]', '', anno)) %>% 
+  rbind(zscan18.row) %>% 
+  merge(aale.de.seq, by = 'gene')
+
+trono.znf.targets <- read_csv('data/other/wetlab/all.znf.te.score.csv') %>% 
+  gather(target, score, -X1)
+```
+## gene sets of interest
+```{r echo=FALSE}
+kras.isg.signature <- c("DDX58", "IFIH1", "IFNL1", "IRF9", "IFI27", "OAS2", "IFIT3", "IFIT1", "OASL", "ISG15", "OAS3", "RSAD2", "MX1", "OAS1", "IFI44", "CH25H", "IFIT2", "ISG20", "RNASEL", "IFI6", "HERC5", "HERC6", "GBP3", "GBP1", "IRF1", "ISG15")
+
+liu.isg.signature <- c('ADAR', 'DDX60', 'HERC6', 'IRF7', 'OASL', 'PSM2', 'STAT2', 'TRIM25', 'BST2', 'DHX58', 'IFI35',
+                       'ISG15', 'OGFR', 'RSAD2', 'TDRD7', 'UBE2L6', 'CASP1', 'EIF2AK2', 'IFIH1', 'ISG20', 'PARP12',
+                       'RTP4', 'TRAFD1', 'USP18', 'CMPK2', 'EPSTI1', 'IFIT2', 'MX1', 'PARP14', 'SAMD9L', 'TRIM14',
+                       'CXCL10', 'GBP4', 'IFIT3', 'NMI', 'PNPT1', 'SP110', 'TRIM21')
+
+gs.names = c("KRAS ISG SIGNATURE" , 
+             "LIU ISG SIGNATURE" ,
+             'HALLMARK IFNA RESPONSE',
+             'HALLMARK IFNG RESPONSE',
+             'HALLMARK KRAS UP')
+
+rig.i.mda5.induction <- 
+  msigdbr(species = 'Homo sapiens') %>% 
+  subset(grepl('REACTOME_DDX58', gs_name)) %>% 
+  mutate(gs_name = 'RIG_I_MDA5_INDUCTION') %>% 
+  select(gene_symbol) %>% 
+  unlist() %>% 
+  unname()
+
+rig.i.mda5.neg.regulation <- 
+  msigdbr(species = 'Homo sapiens') %>% 
+  subset(grepl('OF_DDX58', gs_name)) %>% 
+  mutate(gs_name = 'RIG_I_MDA5_NEG_REGULATION') %>% 
+  select(gene_symbol) %>% 
+  unlist() %>% 
+  unname()
+
+msig.df.h.ifng <- 
+  msigdbr(species = 'Homo sapiens', category = 'H') %>% 
+  subset(grepl('_GAMMA_RESPONSE', gs_name)) %>% 
+  mutate(gs_name = 'HALLMARK_IFNG_RESPONSE') %>% 
+  select(gene_symbol) %>% 
+  unlist() %>% 
+  unname()
+
+msig.df.h.ifna <- 
+  msigdbr(species = 'Homo sapiens', category = 'H') %>% 
+  subset(grepl('_ALPHA_RESPONSE', gs_name)) %>% 
+  mutate(gs_name = 'HALLMARK_IFNA_RESPONSE') %>% 
+  select(gene_symbol) %>% 
+  unlist() %>% 
+  unname()
+
+kras.signal.up <- 
+  msigdbr(species = 'Homo sapiens') %>% 
+  filter(gs_name == 'HALLMARK_KRAS_SIGNALING_UP')  %>% 
+  select(gene_symbol) %>% 
+  unlist() %>% 
+  unname()
+
+```
+## global functions:
+```{r}
+save_pheatmap_pdf <- function(x, filename, width=7, height=7) {
+   stopifnot(!missing(x))
+   stopifnot(!missing(filename))
+   pdf(filename, width=width, height=height)
+   grid::grid.newpage()
+   grid::grid.draw(x$gtable)
+   dev.off()
+}
+```
+
+## Data set post-processing:
+### DESeqII Output
+```{r}
+ha1em.de.seq <- read.csv('../data/bulk.rna.seq/ha1em/output/ha1em.kras.v.ctrl.de-seq.csv') %>% 
+  filter(padj < 0.01)
+names(ha1em.de.seq) <- c('gene', 'baseMean', 'log2fc', 'lfcse', 'pval', 'padj')
+aale.de.seq <- read.csv('../data/bulk.rna.seq/aale/output/aale.kras.v.ctrl.de-seq.csv') %>% 
+  filter(padj < 0.01)
+names(aale.de.seq) <- c('gene', 'baseMean', 'log2fc', 'lfcse', 'pval', 'padj')
+
+aale.te.de.seq <- 
+  read_csv('../data/bulk.rna.seq/aale/output/te.locus.aale.kras.v.ctrl.de-seq.csv',
+           col_names = c('gene', 'baseMean', 'log2fc', 'lfcse', 'pval', 'padj'),
+           skip=1) %>% 
+  filter(padj < 0.01, ! gene %in% aale.de.seq$Gene) 
+```
+### Single cell:
+#### import and QA
+```{r}
+# load in alevin quant matrix as a seurat object, assess standard measurements
+set.seed(431)
+
+files <- 
+  file.path('data/single.cell.rna.seq/output/gencode.te.locus.v.1.index.alevin.out/alevin/quants_mat.gz')
+file.exists(files)
+
+txi <- tximport(files, type="alevin")
+
+kras.aale.sc <- CreateSeuratObject(counts = txi$counts, min.cells = 3, 
+                                   min.features = 200, project = "KRAS.AALE")
+
+kras.aale.sc[["percent.mt"]] <- PercentageFeatureSet(kras.aale.sc, pattern = "^MT-")
+kras.aale.sc[["percent.rp"]] <- PercentageFeatureSet(kras.aale.sc, pattern = '^RP')
+
+VlnPlot(kras.aale.sc, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"))
+plot1 <- FeatureScatter(kras.aale.sc, feature1 = "nCount_RNA", feature2 = "percent.mt")
+plot2 <- FeatureScatter(kras.aale.sc, feature1 = "nCount_RNA", feature2 = "nFeature_RNA")
+plot3 <- FeatureScatter(kras.aale.sc, feature1 = "nCount_RNA", feature2 = "percent.rp")
+# scatter plot of MT, RNA, Ribo
+CombinePlots(plots = list(plot1, plot2, plot3))
+```
+#### filter and PCA
+```{r}
+## Filter according to seurat guidelines
+## I've reworked this extensively and, due to the relatively small number of truly variable genes and cells, I've filtered heavily
+## these settings seem to provide the most robust characterization of the immune phenotype we're seeing
+set.seed(431)
+
+kras.aale.sc <- subset(kras.aale.sc, 
+                       subset = nFeature_RNA >= 2000  & 
+                         percent.mt < 5 & 
+                         nFeature_RNA <= 7000)
+
+kras.aale.sc <- NormalizeData(kras.aale.sc, 
+                              normalization.method = "LogNormalize", scale.factor = 10000)
+
+kras.aale.sc <- FindVariableFeatures(kras.aale.sc, selection.method = "vst", nfeatures = 500)
+
+# vector of all remaining genes in the seurat object
+all.genes <- rownames(kras.aale.sc)
+
+kras.aale.sc <- ScaleData(kras.aale.sc, features = all.genes)
+kras.aale.sc <- RunPCA(kras.aale.sc, features = VariableFeatures(object = kras.aale.sc))
+
+# jackstraw is just for EDA, arguments here won't affect the clustering, but results should be used to aid
+# in determining appropriate UMAP args
+kras.aale.sc <- JackStraw(kras.aale.sc, num.replicate = 100)
+kras.aale.sc <- ScoreJackStraw(kras.aale.sc, dims = 1:20)
+
+JackStrawPlot(kras.aale.sc, dims = 1:20)
+
+ElbowPlot(kras.aale.sc)
+```
+#### tidying normalized counts
+```{r, include=FALSE}
+# extract scaled, normalized counts
+kras.aale.sc.norm.counts <- as.data.frame(as.matrix(kras.aale.sc[["RNA"]]@scale.data))
+# extract barcodes
+kras.barcode.counts <- 
+  as.data.frame(as.matrix(kras.aale.sc@active.ident)) %>% 
+  rownames_to_column('barcode')
+# rename column to reflect data
+names(kras.barcode.counts)[2] <- 'cluster'
+# tidy 
+kras.aale.sc.norm.counts <- 
+  kras.aale.sc.norm.counts %>% 
+  rownames_to_column('gene') %>% 
+  gather(barcode, norm.counts, -gene) 
+# pair barcodes and counts
+kras.aale.sc.norm.counts <- 
+  merge(kras.aale.sc.norm.counts, kras.barcode.counts, by = 'barcode')
+```
+#### Building gene sets from the count matrix
+```{r}
+# make TE class gene sets
+alu.gene.set <- subset(kras.aale.sc.norm.counts, grepl('^Alu', gene))$gene
+mer.gene.set <- subset(kras.aale.sc.norm.counts, grepl('^MER', gene))$gene
+herv.gene.set <- subset(kras.aale.sc.norm.counts, grepl('^HERV', gene))$gene
+ltr.gene.set <- subset(kras.aale.sc.norm.counts, grepl('^LTR', gene))$gene
+line.gene.set <- subset(kras.aale.sc.norm.counts, grepl('^L1', gene))$gene
+znf.gene.set <- trono.de.krab.znfs$gene
+gene.set.list <- lst(alu.gene.set,
+                   mer.gene.set,
+                   herv.gene.set,
+                   ltr.gene.set,
+                   line.gene.set,
+                   znfs.gene.set,
+                   liu.isg.signature,
+                   kras.isg.signature,
+                   rig.i.mda5.induction,
+                   rig.i.mda5.neg.regulation,
+                   msig.df.h.ifna,
+                   msig.df.h.ifng,
+                   kras.signal.up)
+```
+#### Calculate gene sets within the suerat counts matrix:
+```{r}
+## using seurat wrappers for GGPLOT functions to visualize the means of gene sets on a per cell/per cluster basis
+# make a copy so we don't overwrite everything above accidentallu
+gene.set.kras.aale.sc <- kras.aale.sc  
+# add the gene set as an attribute of the single cell object (requires the SCexperiment library)
+add.gene.set.to.sc <- function(gene.set, name){
+  gene.set <- 
+    rownames(gene.set.kras.aale.sc[['RNA']]@data)[rownames(gene.set.kras.aale.sc[['RNA']]@data) %in% gene.set]
+  
+  # Get mean expression of genes of interest per cell
+  mean.exp <- 
+    colMeans(x = gene.set.kras.aale.sc[['RNA']]@data[rownames(gene.set.kras.aale.sc[['RNA']]@scale.data) %in% gene.set, ], 
+             na.rm = TRUE)
+  # Add mean expression values in 'object@meta.data$gene.set.score'
+  name <- deparse(substitute(name))
+  gene.set.kras.aale.sc@meta.data[, `name`] <- mean.exp 
+  return(gene.set.kras.aale.sc)
+}
+
+# need to pass the name like this in order to use it as a string...unless I overcomplicated things
+gene.set.kras.aale.sc <- add.gene.set.to.sc(liu.isg.signature, `liu.isg.signature`)
+gene.set.kras.aale.sc <- add.gene.set.to.sc(kras.isg.signature, `kras.isg.signature`)
+gene.set.kras.aale.sc <- add.gene.set.to.sc(msig.df.h.ifna, `msig.df.h.ifna`)
+gene.set.kras.aale.sc <- add.gene.set.to.sc(msig.df.h.ifng, `msig.df.h.ifng`)
+gene.set.kras.aale.sc <- add.gene.set.to.sc(kras.signal.up, `kras.signal.up`)
+gene.set.kras.aale.sc <- add.gene.set.to.sc(rig.i.mda5.induction, `rig.i.mda5.induction`)
+gene.set.kras.aale.sc <- add.gene.set.to.sc(alu.gene.set, `alu`)
+gene.set.kras.aale.sc <- add.gene.set.to.sc(mer.gene.set, `mer`)
+gene.set.kras.aale.sc <- add.gene.set.to.sc(line.gene.set, `line`)
+gene.set.kras.aale.sc <- add.gene.set.to.sc(ltr.gene.set, `ltr`)
+
+# spread data into gene columns
+norm.counts.plot <- 
+  kras.aale.sc.norm.counts %>% 
+  group_by(barcode) %>% 
+  subset(gene %in% unlist(eval(gene.set.list))) %>%
+  spread(gene, norm.counts)
+
+norm.counts.plot %>% 
+  gather(gene, count, -cluster, -barcode) %>% 
+  group_by(gene) %>% 
+  summarise(count = mean(count)) %>% 
+  filter(! gene %in% aale.de.seq$gene) %>% 
+  top_n(20, count)
+
+# iterate through named list and create a column for each, populating with the avg counts of that set
+for(name in names(gene.set.list)){
+  norm.counts.plot[, name] <-
+  rowMeans(norm.counts.plot[, colnames(norm.counts.plot) %>% 
+                            subset(. %in% unlist(eval(gene.set.list[name])))])
+}
+
+# make a slimmer df to work with going forward
+norm.counts.plot.final <-
+  norm.counts.plot %>%
+  select(barcode, cluster, unlist(names(gene.set.list)))
+```
+
+### ATAC Seq:
+
+
+# Figure 1:
+## A: ISG Volcano Plots:
+```{r}
+plot.isg.volcano <- function(quant.file) {
+  quant.file <- subset(quant.file, gene %in% c(kras.isg.signature,
+                                               liu.isg.signature,
+                                               msig.df.h.ifna,
+                                               msig.df.h.ifng)) %>% 
+    # for pval == 0, set to the lowest observed pval non 0 pvalue
+    mutate(padj = ifelse(padj == 0, 
+                         8.402919e-301, 
+                         padj))
+
+  ggplot(quant.file, aes(y=-log10(padj),
+                     x=log2fc)) + 
+  theme(axis.line = element_blank()) +
+  geom_point(size = rel(1), alpha = 0.5, color = viridis(1)[1]) + 
+  geom_rug(size = rel(0.5),length = unit(rel(0.1), 'cm'), 
+           alpha = 0.3, color = viridis(12, option = 'plasma')[1]) + 
+  scale_x_continuous(limits = c(-6, 6)) +
+  xlab('log2(Fold Change)') +
+  ylab('-log10(padj)') +
+  geom_hline(yintercept = -log10(0.05), linetype='dotted', alpha = 0.4) +
+  geom_vline(xintercept = 0, linetype='dotted', alpha = 0.4) +
+  geom_hline(yintercept = -log10(0.05), linetype='dotted', alpha = 0.4) +
+  geom_vline(xintercept = c(-1,0,1), linetype='dotted', alpha = 0.4) +
+  scale_color_manual(name='', guide = F, values = c(viridis(1),'grey')) +
+  ggrepel::geom_text_repel(aes(label = ifelse(abs(log2fc) > 2 ,
+                                       as.character(gene), '')),
+                         box.padding = unit('0.5', 'lines'),
+                         segment.color = 'gray',
+                         segment.alpha = 0.2,
+                         color = 'black',
+                         ylim = c(0.5, Inf), size = rel(2.5))
+} 
+
+isg.aale.de.seq <- plot.isg.volcano(aale.de.seq)
+isg.aale.de.seq
+# ggsave(plot = isg.aale.de.seq, 
+#        '../figures/fig.1/updated.isg.volcano.2.5x3.5.pdf', 
+#        height = 2.5, width = 3.5, units = 'in')
+
+```
+## B: GSEA of both HA1E and AALE cell types:
+```{r}
+msig.gs.name.list <- 
+            c('DER_IFN_ALPHA_RESPONSE_UP',
+             'DER_IFN_GAMMA_RESPONSE_UP',
+             'REACTOME_RIG_I_MDA5_MEDIATED_INDUCTION_OF_IFN_ALPHA_BETA_PATHWAYS',
+             'DER_IFN_BETA_RESPONSE_UP',
+             'HALLMARK_INTERFERON_GAMMA_RESPONSE',
+             'HALLMARK_INTERFERON_ALPHA_RESPONSE',
+             'KRAS_ISG_SIGNATURE',
+             'LIU_ISG_SIGNATURE',
+             'HALLMARK_KRAS_SIGNALING_UP')
+
+fgsea.kras.isg.signature <- 
+  tibble(gene_symbol = kras.isg.signature,
+         gs_name = 'kras_isg_signature')
+
+fgsea.liu.isg.signature <- 
+  tibble(gene_symbol = liu.isg.signature,
+         gs_name = 'liu_isg_signature')
+
+fgsea.rig.i.mda5.induction <- 
+  msigdbr(species = 'Homo sapiens') %>% 
+  subset(grepl('REACTOME_DDX58', gs_name)) %>% 
+  mutate(gs_name = 'rig_i_mda5_induction') %>% 
+  select(gs_name, gene_symbol)
+
+fgsea.rig.i.mda5.neg.regulation <- 
+  msigdbr(species = 'Homo sapiens') %>% 
+  subset(grepl('OF_DDX58', gs_name)) %>% 
+  mutate(gs_name = 'rig_i_mda5_neg_regulation') %>% 
+  select(gs_name, gene_symbol)
+
+fgsea.msig.df.h.ifng <- 
+  msigdbr(species = 'Homo sapiens', category = 'H') %>% 
+  subset(grepl('_GAMMA_RESPONSE', gs_name)) %>% 
+  mutate(gs_name = 'hallmark_ifng_response') %>% 
+  select(gs_name, gene_symbol)
+
+fgsea.msig.df.h.ifna <- 
+  msigdbr(species = 'Homo sapiens', category = 'H') %>% 
+  subset(grepl('_ALPHA_RESPONSE', gs_name)) %>% 
+  mutate(gs_name = 'hallmark_ifna_response') %>% 
+  select(gs_name, gene_symbol)
+
+fgsea.kras.signal.up <- 
+  msigdbr(species = 'Homo sapiens') %>% 
+  filter(gs_name == 'HALLMARK_KRAS_SIGNALING_UP') %>% 
+  mutate(gs_name = 'hallmark_kras_signaling_up') %>% 
+  select(gs_name, gene_symbol)
+
+msig.df <- 
+  msigdbr(species = 'Homo sapiens', category = 'H') %>% 
+  select(gene_symbol, gs_name) %>% 
+  filter(! gs_name %in% msig.gs.name.list) %>% 
+  rbind(fgsea.msig.df.h.ifng) %>% 
+  rbind(fgsea.msig.df.h.ifna) %>% 
+  rbind(fgsea.kras.isg.signature) %>% 
+  rbind(fgsea.liu.isg.signature) %>% 
+  rbind(fgsea.kras.signal.up) %>% 
+  split(x = .$gene_symbol, f = .$gs_name)
+
+make.fgsea.ranks <- function(de.seq){
+  
+  # build a ranked gene list in the appropriate format (named list)
+  # using shrunken log2 Fold Change values from DESeqII
+  de.seq <- 
+    de.seq %>%
+    mutate(rank = as.double(log2fc),
+           Gene = as.character(gene)) %>% 
+    select(Gene, rank) %>%
+    mutate(rank = scale(rank)) 
+  
+  de.seq.rnk <- 
+    de.seq$rank
+  de.seq.rnk <- 
+    setNames(de.seq$rank, de.seq$Gene)
+  # run the GSEA implementation on the hallmark sets supplemented with custom sets
+  print('fgsea')
+  de.seq.fgsea.res <- 
+    fgsea(pathways = msig.df, 
+          stats = de.seq.rnk, 
+          nperm = 100000)
+  
+  print('padj filter and clean names')
+  # convert to a tidy format, clean the names for display
+  de.seq.fgsea.df <- 
+    as_tibble(de.seq.fgsea.res) %>% 
+    filter(padj < 0.01) %>% 
+    mutate(pathway = gsub('_', ' ', pathway))
+  
+  return(de.seq.fgsea.df)
+  # clean tmp objects
+  rm(de.seq, de.seq.rnk, de.seq.fgsea.res, de.seq.fgsea.df)
+}
+
+aale.rnk.df <- make.fgsea.ranks(aale.de.seq %>% padj > 0)
+ha1e.rnk.df <- make.fgsea.ranks(ha1em.de.seq %>%  padj > 0)
+  
+aale.rnk.df %>% 
+  mutate(condition = 'aale') %>% 
+  filter(pathway %in% ha1e.rnk.df$pathway) %>% 
+  rbind(ha1e.rnk.df %>% 
+          filter(pathway %in% aale.rnk.df$pathway) %>% 
+          mutate(condition = 'ha1e')) %>% 
+  ggplot(aes(as.factor(reorder(pathway, NES)), NES, fill = condition)) + 
+  geom_bar(stat = 'identity', position = 'dodge', width = rel(0.5)) +
+  xlab('') +
+  scale_fill_manual('cell line', values = c(viridis(3)[1], viridis(3)[2])) +
+  geom_hline(yintercept = seq(-3,3), alpha = 1, size = 0.5, color = 'white') +
+  geom_vline(xintercept = 4.5, alpha = 0.3, size = 0.25, color = c('black')) +
+  geom_hline(yintercept = 0, alpha = 0.3, size = 0.5, color = 'black') +
+  theme(legend.position = 'top',
+        axis.text.x = element_text(angle = 40, hjust = 1))
+
+# ggsave('../figures/fig.1/gsea.bar.2.5x3.pdf', height = 2.5, width = 3, units = 'in')
+```
+## C: Venn Diagram of ISG gene sets:
+```{r}
+temp.vd <- venn.diagram(
+  x = list(
+    kras.isg.signature %>% unlist(),
+    liu.isg.sig %>% unlist(),
+    msig.df.h.ifna %>% unlist(),
+    msig.df.h.ifng %>% unlist()),
+  category.names = c('','','',''),
+  filename = NULL,
+  output = TRUE,
+  col = c(viridis(4)),
+  imagetype = 'pdf',
+  height = unit(3.5, 'in') ,
+  width = unit(3.5, 'in') ,
+  resolution = 300,
+  compression = "lzw",
+  lwd = 1,
+  fill = c(alpha(viridis(4)[1],0.3), alpha(viridis(4)[2],0.3), alpha(viridis(4)[3],0.3), alpha(viridis(4)[4],0.3)), 
+  fontfamily = "Helvetica",
+  scaled = T,
+  cat.just = list(c(0.5,0),c(0.5,0),c(0,0),c(0,0)))
+
+grid.draw(temp.vd)
+# 
+# library(grDevices)
+# 
+# pdf(file="gsea.venn.1.5x1.5.pdf")
+# dev.off()
+```
+## D: Single Cell UMAP -- Suerat
+```{r}
+## run clustering via suerat with manually determined args
+set.seed(431)
+# knn, umap
+kras.aale.sc <- FindNeighbors(kras.aale.sc, dims = 1:10)
+kras.aale.sc <- FindClusters(kras.aale.sc, resolution = 0.6)
+kras.aale.sc <- RunUMAP(kras.aale.sc, dims = 1:10)
+# assess QC features on a cluster-to-cluster basis to detect bias
+VlnPlot(kras.aale.sc, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"))
+
+# note that you can set `label = TRUE` or use the LabelClusters function to help label
+# individual clusters
+DimPlot(kras.aale.sc, 
+        reduction = "umap", 
+        pt.size = 0.42,  
+        cols = c(viridis(12, option = 'plasma')[1],
+                 viridis(12, option = 'inferno')[2],
+                 viridis(12, option = 'D')[5],
+                 viridis(12, option = 'plasma')[7],
+                 viridis(12, option = 'inferno')[9],
+                 viridis(12, option = 'D')[11],
+                 viridis(12, option = 'magma')[6],
+                 viridis(12, option = 'magma')[3])) + set_aale_theme()
+
+#ggsave('figures/fig.1/updated.umap.sc.2.25x3.pdf', height = 2.25, width = 3, units = 'in')
+```
+## E: ISG gene set Single Cell violins:
+```{r}
+# making the plot objects
+make.gene.set.vln <- function(name){
+  
+  name <- deparse(substitute(name))
+
+  return(VlnPlot(gene.set.kras.aale.sc, 
+        features = `name`, 
+        nrow = 1, pt.size = 0, size = 0.5, 
+        cols = c(viridis(12, option = 'plasma')[1],
+                 viridis(12, option = 'inferno')[2],
+                 viridis(12, option = 'D')[5],
+                 viridis(12, option = 'plasma')[7],
+                 viridis(12, option = 'inferno')[9],
+                 viridis(12, option = 'D')[11])) + 
+  xlab('') + 
+    set_aale_theme() +
+    theme(plot.margin=margin(-2,0,-1,1,unit = "mm")) +
+    theme(legend.position = 'null'))
+}
+
+
+liu.isg.vln <- make.gene.set.vln(`liu.isg.signature`) + 
+  theme(axis.ticks.x = element_blank(),
+        axis.text.x = element_blank())
+kras.isg.vln <- make.gene.set.vln(`kras.isg.signature`)
+msig.df.h.ifna.vln <- make.gene.set.vln(`msig.df.h.ifna`)
+msig.df.h.ifng.vln <- make.gene.set.vln(`msig.df.h.ifng`)
+kras.signal.up.vln <- make.gene.set.vln(`kras.signal.up`) + 
+  theme(axis.ticks.x = element_blank(),
+        axis.text.x = element_blank())
+
+# pasting them into a single panel
+patchwork::wrap_plots(list(kras.signal.up.vln,liu.isg.vln, msig.df.h.ifna.vln,kras.isg.vln))
+# ggsave('figures/fig.1/updated.stacked.vln.2.5x3.5.pdf', height = 2.5, width = 3.5, units = 'in')
+```
+## F: Cluster 4 marker gene heatmap:
+```{r}
+## transform count matrix into a tidy data set to plot cluster v count
+isg.heatmap.norm.counts.plot <- 
+  kras.aale.sc.norm.counts %>% 
+  group_by(barcode) %>% 
+  subset(gene %in% c(isg.markers, 'DDX58', 'IFIH1')) %>%
+  spread(gene, norm.counts)
+
+# build annotations for pheatmap anno column
+isg.anno.df <- data.frame('cluster' = c(4,2,1,0,3)) %>%
+  mutate(cluster = as.factor(cluster))
+rownames(isg.anno.df) <- isg.anno.df$cluster
+
+# make color vector to correclty represent colors matching UMAP above
+isg.anno.colors <- list(cluster = c(`0` = viridis(12, option = 'plasma')[1],
+                 `1` = viridis(12, option = 'inferno')[2],
+                 `2` = viridis(12, option = 'D')[5],
+                 `3` = viridis(12, option = 'plasma')[7],
+                 `4` = viridis(12, option = 'inferno')[9]))
+# pheatmap
+isg.marker.heatm <- 
+  isg.heatmap.norm.counts.plot %>%
+  gather(gene, count, -barcode, -cluster) %>% 
+  mutate(gene = ifelse(gene == 'DDX58', 'RIG-I', gene),
+         gene = ifelse(gene == 'IFIH1', 'MDA5', gene)) %>% 
+  group_by(cluster, gene) %>% 
+  summarise(mean.count = mean(count)) %>% 
+  ungroup() %>% 
+  mutate(mean.count = log2(mean.count + 1)) %>% 
+  filter(!is.na(mean.count)) %>% 
+  spread(cluster, mean.count) %>% 
+  column_to_rownames('gene') %>% 
+  pheatmap::pheatmap(color = viridis(512), 
+                     border_color = NA, 
+                     treeheight_col = 7, 
+                     treeheight_row = 7,
+                     fontsize = 7,
+                     show_colnames = F,
+                     width = 3.5, height = 2, angle_col = 0,
+                     annotation = isg.anno.df,
+                     annotation_colors = isg.anno.colors) 
+
+# save_pheatmap_pdf(isg.marker.heatm, 'figures/fig.1/updated.isg.marker.heat.pdf', height = 2, width = 3.5)
+```
+## G: Single Cell scatter plots for dsRNA detectors:
+```{r}
+ggplot(norm.counts.plot %>% filter(cluster %in% c(2,4)), 
+       aes(rig.i.mda5.induction, kras.isg.signature, color = cluster)) + 
+  geom_point(size = 0.42) +
+  geom_rug() +
+  scale_color_manual(values = c(viridis(12, option = 'D')[5], viridis(12, option = 'inferno')[9])) + 
+  # ylab('KRAS ISG') +
+  # xlab('RIG I / MDA5 INDUCTION') + 
+  facet_row(~cluster, scales = 'free') + 
+  geom_smooth(method = 'lm', se = F, size = 0.42) + 
+  ggpubr::stat_cor(show.legend = F, inherit.aes = T, size = rel(2), 
+                   label.x.npc = 'left', label.y.npc = 1) +
+  set_aale_theme() + 
+  theme(plot.margin=margin(0,0,1,1,unit = "mm")) + 
+  theme(strip.text = element_blank())
+
+# ggsave('figures/fig.1/rig.i.v.kras.isg.scatter.label.1.25x3.5.pdf', 
+#        height = 1.25, width = 3.5, units = 'in')
+```
+## H: dsRNA detector cluster violins:
+```{r}
+make.gene.vln <- function(name){
+  
+  name <- deparse(substitute(name))
+
+  return(VlnPlot(gene.set.kras.aale.sc,
+        features = c(`name`), 
+        nrow = 1, pt.size = 0.02, pt.alpha = 0., size = 0.5, 
+        cols = c(viridis(12, option = 'plasma')[1],
+                 viridis(12, option = 'inferno')[2],
+                 viridis(12, option = 'D')[5],
+                 viridis(12, option = 'plasma')[7],
+                 viridis(12, option = 'inferno')[9],
+                 viridis(12, option = 'D')[11])) + 
+  xlab('') + 
+  vln_theme() + 
+  
+  theme(legend.position = 'null',
+        plot.margin =  margin(-6,0,-3,0,unit = "mm")))
+
+}
+
+## do the same thing but for individual genes
+ddx58.vln <- make.gene.vln(`DDX58`) + 
+  scale_y_continuous(limits = c(-0.01,1.3)) 
+ifih1.vln <- make.gene.vln(`IFIH1`) + 
+  scale_y_continuous(limits = c(-0.01,1.3)) + 
+  theme(axis.title.y = element_blank(), 
+        axis.ticks.y = element_blank(), 
+        axis.text.y = element_blank())
+patchwork::wrap_plots(list(ddx58.vln, ifih1.vln), ncol = 2)
+# ggsave('figures/fig.1/updated.dsRNA.sensor.vln.1.25x3.5.pdf', height = 1.25, width = 3.5, units = 'in')
+```
+## I: Cell Titer Glo boxplots:
+```{r}
+cell.Titer <- read_csv('../data/other/wetlab/cellTiter.csv', skip = 1, 
+                       col_names = c('background', 'si', '1','2','3','4','5','6','7','8','9'))
+cell.Titer['M1'] <- rowMeans(cell.Titer[, 3:5])
+cell.Titer['M2'] <- rowMeans(cell.Titer[, 6:8])
+cell.Titer['M3'] <- rowMeans(cell.Titer[, 9:11])
+
+cell.Titer %>% 
+  filter(background == 'KRAS_AALE') %>% 
+  select(si, M1, M2, M3) %>%
+  column_to_rownames('si') %>% 
+  t() %>% 
+  as.tibble() %>% 
+  # rename(siKRAS = 'KRAS',
+  #        siCTRL = 'NC.1',
+  #        `siRIG-I` = 'RIG-I',
+  #        siMDA5 = 'MDA5') %>% 
+    rename(KRAS = 'siKRAS',
+         NC.1 = 'siCTRL',
+         `RIG-I` = 'siRIG-I',
+         MDA5 = 'siMDA5') %>% 
+  gather(target, Rel.Luminescence) %>%
+  mutate(Rel.Luminescence = Rel.Luminescence/1e06) %>% 
+  ggplot(aes(target, Rel.Luminescence)) + 
+  geom_point(size = rel(0.5), color = viridis(1)) + 
+  geom_boxplot(size = rel(0.5), color = viridis(1)) + 
+  geom_signif(comparisons =  list(c('siCTRL','siKRAS'),
+                                  c('siCTRL', 'siMDA5'),
+                                  c('siCTRL', 'siRIG-I')),
+                                   test = 't.test', step_increase = 0.075, 
+              size = rel(0.25), inherit.aes = T, textsize = rel(2), 
+              color = 'black') + 
+  scale_x_discrete(limits=c('siCTRL','siKRAS', 'siMDA5', 'siRIG-I')) + 
+  xlab('') + scale_y_continuous(limits = c(2,6.5)) + set_my_theme() + 
+  theme(plot.margin =  margin(-2,-.25,-.25,1,unit = "mm")) + 
+  ylab('cell viability (ATP)')
+                         
+# ggsave('../figures/fig.1/updated.ctg.2.5x3.pdf', height = 2.5, width = 3, units = 'in')
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+```{r}
+line.vln <- make.gene.set.vln(`line`) + 
+  theme(axis.text.x = element_blank(),
+        axis.ticks.x = element_blank())
+alu.vln <- make.gene.set.vln(`alu`) + 
+  theme(axis.text.x = element_blank(),
+        axis.ticks.x = element_blank())
+ltr.vln <- make.gene.set.vln(`ltr`)
+mer.vln <- make.gene.set.vln(`mer`)
+
+patchwork::wrap_plots(list(alu.vln, line.vln, mer.vln, ltr.vln)) 
+# ggsave('figures/fig.3/stacked.te.vln.2.5x3.5.pdf', height = 2.5, width = 3.5, units = 'in')
+make.gene.vln <- function(name){
+  
+  name <- deparse(substitute(name))
+
+  return(VlnPlot(gene.set.kras.aale.sc,
+        features = c(`name`), 
+        nrow = 1, pt.size = 0.02, pt.alpha = 0., size = 0.5, 
+        cols = c(viridis(12, option = 'plasma')[1],
+                 viridis(12, option = 'inferno')[2],
+                 viridis(12, option = 'D')[5],
+                 viridis(12, option = 'plasma')[7],
+                 viridis(12, option = 'inferno')[9],
+                 viridis(12, option = 'D')[11])) + 
+  xlab('') + 
+  vln_theme() + 
+  
+  theme(legend.position = 'null',
+        plot.margin =  margin(-6,0,-3,0,unit = "mm")))
+
+}
+
+## do the same thing but for individual genes
+ddx58.vln <- make.gene.vln(`DDX58`) + 
+  scale_y_continuous(limits = c(-0.01,1.3)) 
+ifih1.vln <- make.gene.vln(`IFIH1`) + 
+  scale_y_continuous(limits = c(-0.01,1.3)) + 
+  theme(axis.title.y = element_blank(), 
+        axis.ticks.y = element_blank(), 
+        axis.text.y = element_blank())
+
+l1mc4a.vln <- make.gene.vln(`L1MC4a`) 
+alusx.vln <- make.gene.vln(`AluSx`) + theme(axis.title.y = element_blank())
+patchwork::wrap_plots(list(l1mc4a.vln, alusx.vln), ncol = 2)
+ggsave('figures/fig.3/alu.line.stacked.vln.1.25x3.5.pdf', height = 1.25, width = 3.5, units = 'in')
+
+ifih1.vln <- make.gene.vln(`IFIH1`) + ylab('') 
+
+
+
+ddx58.vln + ifih1.vln
+
+```
+
+
+
+
+
+
+
+
