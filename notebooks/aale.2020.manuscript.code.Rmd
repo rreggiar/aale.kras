@@ -4,15 +4,18 @@ author: 'Roman E. Reggiardo'
 date: '04/29/2020'
 output: html_document
 editor_options: 
-  chunk_output_type: console
+  chunk_output_type: inline
 ---
 
 # Setup:
 
 ## installs
-```{r setup, include=FALSE}
+```{r setup}
 knitr::opts_chunk$set(echo = TRUE)
-knitr::opts_knit$set(root.dir = '.')
+knitr::opts_knit$set(root.dir = '/home/rreggiar/notebooks')
+setwd('/home/rreggiar/notebooks')
+getwd()
+
 ```
 ## loading
 ```{r}
@@ -33,7 +36,8 @@ suppressPackageStartupMessages({
   library(stringr)
   library(patchwork)
   library(fgsea)
-  library(Hmisc)
+  library(msigdbr)
+  #library(Hmisc)
   library(SingleCellExperiment)
   library(tximport)
   library(Seurat)
@@ -90,8 +94,8 @@ set_aale_theme  <- function(){theme_set(theme_foundation(base_size = 7, base_fam
 ## figure dirs, and other globally relevant constants
 ```{r}
 figure.dir.1 <-  '/home/rreggiar/figures'
-homer.dir <- 'data/atac.seq/output/atac-seq-pipeline/analysis/homer.annotations/'
-atac.dir <- 'data/atac.seq/output/atac-seq-pipeline/analysis/'
+homer.dir <- '../data/atac.seq/output/atac-seq-pipeline/analysis/homer.annotations/'
+atac.dir <- '../data/atac.seq/output/atac-seq-pipeline/analysis/'
 
 chr.order <- c('chr1', 'chr2', 'chr3', 
                'chr4', 'chr5', 'chr6', 
@@ -117,21 +121,9 @@ chr.19.bins <- data.frame(chr = 'chr19',
                                     55800000, 58617616))
 
 
-zscan18.row <- 
-  tibble('gene' = 'ZSCAN18', 'biotype' = 'protein_coding', 'ensg' = 'placehold',
-                       'chr' = 19, 'start' = 58083839, 
-         'end' = 58098210,  'strand' = '-', 'anno' ='SCAN-ZNF')
 
-trono.de.krab.znfs <- read_csv('data/other/wetlab/all.human.znf.trono.db.csv',
-                            col_names = c('gene', 'biotype', 'ensg', 'chr', 
-                                          'start', 'end', 'strand', 'anno')) %>% 
-  mutate(anno = gsub('s','', anno),
-         anno = gsub('[(]', '', anno),
-         anno = gsub('[)]', '', anno)) %>% 
-  rbind(zscan18.row) %>% 
-  merge(aale.de.seq, by = 'gene')
 
-trono.znf.targets <- read_csv('data/other/wetlab/all.znf.te.score.csv') %>% 
+trono.znf.targets <- read_csv('../data/other/wetlab/all.znf.te.score.csv') %>% 
   gather(target, score, -X1)
 ```
 ## gene sets of interest
@@ -200,66 +192,6 @@ save_pheatmap_pdf <- function(x, filename, width=7, height=7) {
    dev.off()
 }
 
-gene.set.hist <- function(file.name){
-  input.data <- read_tsv(paste0(atac.dir, 'peak.files/', file.name),
-                            col_names = c('pos', 'ctrl', 'ctrl_pos',
-                                          'ctrl_neg', 'kras', 'kras_pos', 'kras_neg'),
-                            skip = 1)
-
-  input.data %>% 
-    select(pos, ctrl, kras) %>% 
-    mutate(`relative ATAC enrichment` = log2((kras + 1) / (ctrl + 1))) %>% 
-    ggplot(aes(pos/1000, `relative ATAC enrichment`)) +
-    geom_line(alpha = 1, size = rel(0.75)) +
-    xlab('distance from peaks (kb)') +
-    #stat_smooth(geom='line', se = F, color = 'black', size = rel(0.75), alpha = 1) +
-    geom_hline(yintercept = 0, linetype = 'dashed', alpha = 0.4) +
-    #theme(plot.margin =  margin(5,1,-1.5,0,unit = "mm")) +
-    scale_y_continuous(limits = c(-5,5), breaks = seq(-12,12, 4)) +
-    geom_vline(xintercept = 0, linetype = 'dashed', alpha = 0.4) %>%
-    return()
-}
-
-homer.motif.hist <- function(file.name){
-  input.data <- read_tsv(paste0(atac.dir, 'peak.files/', file.name),
-                            col_names = c('pos', 'motif_sites', 'motif_pos', 'motif_neg', 
-                                          'ctrl', 'ctrl_pos', 'ctrl_neg', 'kras', 
-                                          'kras_pos', 'kras_neg', "a",'c','g','t'),
-                            skip = 1)
-
-  input.data %>% 
-    select(pos, motif_sites, ctrl, kras) %>% 
-    mutate(`relative ATAC enrichment` = log2((kras + 1) / (ctrl + 1))) %>% 
-    ggplot(aes(pos, `relative ATAC enrichment`)) + 
-    #ggplot(aes(pos, motif_sites)) + 
-    geom_line(alpha = 1, size = rel(1)) +
-    xlab('') + 
-    stat_smooth(geom='line', se = F, color = 'black', size = rel(1), alpha = 0.4) + 
-    geom_hline(yintercept = 0, linetype = 'dashed', alpha = 0.4) +
-    geom_vline(xintercept = 0, linetype = 'dashed', alpha = 0.4) -> plt.1
-  
-  input.data %>% 
-    select(pos, motif_sites, ctrl, kras) %>% 
-    mutate(`relative ATAC enrichment` = log2((kras + 1) / (ctrl + 1))) %>% 
-    #ggplot(aes(pos, `relative ATAC enrichment`)) + 
-    ggplot(aes(pos, motif_sites)) + 
-    geom_line(alpha = 1, size = rel(1)) +
-    xlab('distance from kras.isg signature peaks') + 
-    ylab('motifs per bp per peak') + 
-    geom_hline(yintercept = 0, linetype = 'dashed', alpha = 0.4) +
-    geom_vline(xintercept = 0, linetype = 'dashed', alpha = 0.4) -> plt.2
-  
-  input.data %>% 
-    select(pos, motif_sites, ctrl, kras) %>% 
-    mutate(`relative ATAC enrichment` = log2((kras + 1) / (ctrl + 1))) %>% 
-    ggplot(aes(`relative ATAC enrichment`, motif_sites)) + 
-    geom_point() + 
-    geom_hline(yintercept = 0, linetype = 'dashed', alpha = 0.4) +
-    geom_vline(xintercept = 0, linetype = 'dashed', alpha = 0.4) -> plt.3
-      
-    return( (plt.1 / plt.2))
-}
-
 ```
 
 # Data set post-processing:
@@ -280,6 +212,53 @@ aale.te.de.seq <-
            col_names = c('gene', 'baseMean', 'log2fc', 'lfcse', 'pval', 'padj'),
            skip=1) %>% 
   filter(padj < 0.01, ! gene %in% aale.de.seq$Gene) 
+
+zscan18.row <- 
+  tibble('gene' = 'ZSCAN18', 'biotype' = 'protein_coding', 'ensg' = 'placehold',
+                       'chr' = 19, 'start' = 58083839, 
+         'end' = 58098210,  'strand' = '-', 'anno' ='SCAN-ZNF')
+
+trono.de.krab.znfs <- read_csv('../data/other/wetlab/all.human.znf.trono.db.csv',
+                            col_names = c('gene', 'biotype', 'ensg', 'chr',
+                                          'start', 'end', 'strand', 'anno')) %>%
+  mutate(anno = gsub('s','', anno),
+         anno = gsub('[(]', '', anno),
+         anno = gsub('[)]', '', anno)) %>%
+  rbind(zscan18.row) %>%
+  merge(aale.de.seq, by = 'gene')
+```
+### Sleuth -- TEs
+```{r}
+te.clades.merge <- read_csv('../data/other/wetlab/te.family.clade.csv',
+                            col_names = c('te','family','clade')) %>% 
+  unique()
+
+aale.sleuth.out <- read_csv('../data/bulk.rna.seq/aale/output/quant.data.log2fc.csv') %>% 
+  filter(qval <= 0.05) %>% 
+  separate(Name, sep = '=', into = c('te', 'position', NA, NA, 'strand', NA)) %>% 
+  separate(position, sep = '_', into = c('pos', NA)) %>% 
+  separate(pos, sep = ':', into = c('chr', 'startend')) %>% 
+  separate(startend, sep = '-', into = c('start', 'stop')) %>% 
+  separate(strand, sep = '_', into = c('strand', NA)) %>% 
+  separate(te, sep = '_', into = c(NA, NA, 'te', NA)) %>% 
+  merge(te.clades.merge, by = 'te') %>% 
+  mutate(approach = 'te-only')
+
+aale.combined.sleuth.out <- 
+  read_csv('../data/bulk.rna.seq/aale/output/combined.quant.data.log2fc.csv') %>% 
+  filter(qval <= 0.05,
+         ! grepl('^ENST', Name)) %>% 
+  separate(Name, sep = '=', into = c('te', 'position', NA, NA, 'strand', NA)) %>% 
+  separate(position, sep = '_', into = c('pos', NA)) %>% 
+  separate(pos, sep = ':', into = c('chr', 'startend')) %>% 
+  separate(startend, sep = '-', into = c('start', 'stop')) %>% 
+  separate(te, sep = '_', into = c(NA, NA, 'te', NA)) %>% 
+  separate(strand, sep = '_', into = c('strand', NA)) %>% 
+  merge(te.clades.merge, by = 'te') %>% 
+  mutate(approach = 'combined')
+
+total.sleuth.out <- rbind(aale.sleuth.out, aale.combined.sleuth.out)
+
 ```
 
 ## Single cell:
@@ -290,7 +269,7 @@ aale.te.de.seq <-
 set.seed(431)
 
 files <- 
-  file.path('data/single.cell.rna.seq/output/gencode.te.locus.v.1.index.alevin.out/alevin/quants_mat.gz')
+  file.path('../data/single.cell.rna.seq/output/gencode.te.locus.v.1.index.alevin.out/alevin/quants_mat.gz')
 file.exists(files)
 
 txi <- tximport(files, type="alevin")
@@ -373,7 +352,7 @@ gene.set.list <- lst(alu.gene.set,
                    herv.gene.set,
                    ltr.gene.set,
                    line.gene.set,
-                   znfs.gene.set,
+                   znf.gene.set,
                    liu.isg.signature,
                    kras.isg.signature,
                    rig.i.mda5.induction,
@@ -443,6 +422,72 @@ norm.counts.plot.final <-
 
 ## ATAC Seq:
 
+### functions:
+```{r}
+
+gene.set.hist <- function(file.name){
+  input.data <- read_tsv(paste0(atac.dir, 'peak.files/', file.name),
+                            col_names = c('pos', 'ctrl', 'ctrl_pos',
+                                          'ctrl_neg', 'kras', 'kras_pos', 'kras_neg'),
+                            skip = 1)
+
+  input.data %>% 
+    select(pos, ctrl, kras) %>% 
+    mutate(`relative ATAC enrichment` = log2((kras + 1) / (ctrl + 1))) %>% 
+    ggplot(aes(pos/1000, `relative ATAC enrichment`)) +
+    geom_line(alpha = 0.2, size = rel(0.75)) + 
+    stat_smooth(geom='line', se = F, color = 'black', alpha = 1) + 
+    geom_hline(yintercept = 0, linetype = 'dashed', alpha = 0.4) + 
+    xlab('distance from peaks (kb)') +
+    #stat_smooth(geom='line', se = F, color = 'black', size = rel(0.75), alpha = 1) +
+    geom_hline(yintercept = 0, linetype = 'dashed', alpha = 0.4) +
+    #theme(plot.margin =  margin(5,1,-1.5,0,unit = "mm")) +
+    scale_y_continuous(limits = c(-3,3), breaks = seq(-2,2, 1)) +
+    geom_vline(xintercept = 0, linetype = 'dashed', alpha = 0.4) %>%
+    return()
+}
+
+homer.motif.hist <- function(file.name){
+  input.data <- read_tsv(paste0(atac.dir, 'peak.files/', file.name),
+                            col_names = c('pos', 'motif_sites', 'motif_pos', 'motif_neg', 
+                                          'ctrl', 'ctrl_pos', 'ctrl_neg', 'kras', 
+                                          'kras_pos', 'kras_neg', "a",'c','g','t'),
+                            skip = 1)
+
+  input.data %>% 
+    select(pos, motif_sites, ctrl, kras) %>% 
+    mutate(`relative ATAC enrichment` = log2((kras + 1) / (ctrl + 1))) %>% 
+    ggplot(aes(pos, `relative ATAC enrichment`)) + 
+    #ggplot(aes(pos, motif_sites)) + 
+    geom_line(alpha = 1, size = rel(1)) +
+    xlab('') + 
+    stat_smooth(geom='line', se = F, color = 'black', size = rel(1), alpha = 0.4) + 
+    geom_hline(yintercept = 0, linetype = 'dashed', alpha = 0.4) +
+    geom_vline(xintercept = 0, linetype = 'dashed', alpha = 0.4) -> plt.1
+  
+  input.data %>% 
+    select(pos, motif_sites, ctrl, kras) %>% 
+    mutate(`relative ATAC enrichment` = log2((kras + 1) / (ctrl + 1))) %>% 
+    #ggplot(aes(pos, `relative ATAC enrichment`)) + 
+    ggplot(aes(pos, motif_sites)) + 
+    geom_line(alpha = 1, size = rel(1)) +
+    xlab('distance from kras.isg signature peaks') + 
+    ylab('motifs per bp per peak') + 
+    geom_hline(yintercept = 0, linetype = 'dashed', alpha = 0.4) +
+    geom_vline(xintercept = 0, linetype = 'dashed', alpha = 0.4) -> plt.2
+  
+  input.data %>% 
+    select(pos, motif_sites, ctrl, kras) %>% 
+    mutate(`relative ATAC enrichment` = log2((kras + 1) / (ctrl + 1))) %>% 
+    ggplot(aes(`relative ATAC enrichment`, motif_sites)) + 
+    geom_point() + 
+    geom_hline(yintercept = 0, linetype = 'dashed', alpha = 0.4) +
+    geom_vline(xintercept = 0, linetype = 'dashed', alpha = 0.4) -> plt.3
+      
+    return( (plt.1 / plt.2))
+}
+
+```
 ### annotated peak output (peak files ~ bed 12):
 ```{r}
 read.anno.peaks <- function(path, exp){
@@ -468,25 +513,21 @@ aale.anno.peaks <-
   rbind(ctrl.anno.peaks,
         kras.anno.peaks)
 ```
-### collapsed and merged peaks for comparison:
+## collapsed and merged peaks for comparison:
 ```{r}
 collapse.peaks <- read_tsv(paste0(atac.dir, 'peak.files/aale.collapse.merge.sort.peak.bed'), 
                            col_names = c('chr', 'start', 'end', 
                                          'name', 'fc', 'pval', 
                                          'qval', 'rel.summit')) %>%
-  # mutate(peak = paste0('Peak', "_", row_number())) %>% 
   separate_rows(c(name, fc, pval, qval, rel.summit), sep = ',') %>% 
   separate(name, sep = '_', into = c('condition', 'peak', 'number')) %>% 
   unite(col = 'peak', c(peak, number), sep = '_') %>% 
   mutate(start = start + 1) %>% 
-  merge(kras.anno.peaks, by = c('chr', 'start', 'end', 'peak'))
   mutate(fc = as.numeric(fc),
          pval = as.numeric(pval),
          qval = as.numeric(qval),
          rel.summit = as.numeric(rel.summit)) %>% 
-  separate(name, sep = '_', into = c('condition', 'junk', 'trash')) %>% 
-  select(-junk, -trash) %>% 
-  group_by(chr, start, end, condition, peak) %>% 
+  group_by(chr, start, end, condition) %>%
   dplyr::summarize(fc = mean(fc),
             pval = mean(pval),
             qval = mean(qval),
@@ -494,10 +535,8 @@ collapse.peaks <- read_tsv(paste0(atac.dir, 'peak.files/aale.collapse.merge.sort
 
 ## need to generate the comparison sets separately in order to include peak annotations
 collapse.peaks %>% 
-  select(-pval, -qval, -summit, -peak) %>% 
+  select(-pval, -qval, -summit) %>% 
   spread(condition, fc) %>% 
-  #filter(! is.na(KRAS),
-  #       ! is.na(CTRL)) %>% 
   mutate(KRAS = replace_na(KRAS, 0),
          CTRL = replace_na(CTRL, 0),
          KRAS = KRAS + 0.001,
@@ -505,15 +544,11 @@ collapse.peaks %>%
   ungroup() %>% 
   mutate(log2FC = log2(KRAS/CTRL),
          start = start + 1) %>% # gotta adjust the starts to match the bedtools stuff to homer
-  #subset(chr == 'chr19') %>% 
   merge(kras.anno.peaks, by = c('chr', 'start', 'end')) -> kras.anno.collapsed.peaks
-  #merge(aale.anno.peaks, by = c('chr', 'start', 'end')) -> kras.anno.collapsed.peaks
 
 collapse.peaks %>% 
-  select(-pval, -qval, -summit, -peak) %>% 
+  select(-pval, -qval, -summit) %>% 
   spread(condition, fc) %>% 
-  #filter(! is.na(KRAS),
-  #       ! is.na(CTRL)) %>% 
   mutate(KRAS = replace_na(KRAS, 0),
          CTRL = replace_na(CTRL, 0),
          KRAS = KRAS + 0.001,
@@ -521,7 +556,6 @@ collapse.peaks %>%
   ungroup() %>% 
   mutate(log2FC = log2(KRAS/CTRL),
          start = start + 1) %>% # gotta adjust the starts to match the bedtools stuff to homer
-  #subset(chr == 'chr19') %>% 
   merge(ctrl.anno.peaks, by = c('chr', 'start', 'end')) -> ctrl.anno.collapsed.peaks
 
 ## and then bind into the reference data set
@@ -530,143 +564,25 @@ aale.anno.collapsed.peaks <-
         ctrl.anno.collapsed.peaks) %>% 
   unique() %>% 
   separate(annotation, sep = '[(]', into = c('anno', 'explained')) %>% 
-  separate(explained, sep = '[)]', into = c('motif.type', 'junk')) %>% 
-  select(-junk)
+  separate(explained, sep = '[)]', into = c('motif.type', NA))
 
 aale.anno.collapsed.peaks %>% 
-  # filter(gene %in% filter(trono.krab.znfs,
-  #                         gene %in% filter(aale.de.seq, log2fc < 1)$gene)$gene) %>%
-  filter(gene %in% filter(trono.de.krab.znfs, log2fc < -2)$gene) %>%
-  #filter(gene %in% kras.signal.up) %>%
+  filter(gene %in% filter(trono.de.krab.znfs, log2fc < 2)$gene) %>%
   select(peak, chr, start, end, strand, score, gene, condition, anno) %>% 
-  write_tsv(paste0(atac.dir, 'peak.files/total.znf.2.dn.peaks.file'))
+  write_tsv(paste0(atac.dir, 'peak.files/total.znf.dn.peaks.file'))
 
+ctrl.anno.collapsed.peaks %>% 
+  unique() %>% 
+  separate(annotation, sep = '[(]', into = c('anno', 'explained')) %>% 
+  separate(explained, sep = '[)]', into = c('motif.type', NA)) %>% 
+  filter(gene %in% filter(trono.de.krab.znfs, log2fc < -2)$gene) %>%
+  select(peak, chr, start, end, strand, score, gene, condition, anno) %>% 
+  write_tsv(paste0(atac.dir, 'peak.files/total.znf.dn.peaks.file'))
 
-total.znf.dn.1.annotated.peaks
-
-```
-### generate specific subsets for condition
-```{r}
-collapse.peaks %>% 
-  select(-pval, -qval, -summit, -peak) %>% 
-  spread(condition, fc) %>% 
-  filter(is.na(KRAS)) %>% 
-  select(-KRAS, -CTRL) %>% 
-  ungroup() %>% 
-  mutate(start = start + 1) %>% 
-  merge(ctrl.anno.peaks, by = c('chr', 'start', 'end')) #%>% 
-  write_tsv('data/ctrl.specific.anno.bed')
-  
-aale.anno.collapsed.peaks %>% 
-  filter(abs(log2FC) > 0.5) %>% 
-  select(-KRAS, -CTRL, -log2FC) %>% 
-  ungroup() %>% 
-  unite('peak', c(condition,peak), sep = '_') #%>% 
-  write_tsv('data/aale.anno.bed')
-  
-kras.anno.collapsed.peaks %>% 
-  separate(annotation, sep = '[(]', into = c('anno', 'explained')) %>%
-  filter(chr == 'chr19',
-         grepl('ZNF', gene),
-         log2FC > 0,
-         grepl('TSS', anno)) %>% 
-  select(-CTRL, -KRAS, -log2FC) %>% 
-  write_tsv(paste0(atac.dir, 'peak.files/unique.znf.peaks.file'))
-
-collapse.peaks %>% 
-  filter(condition == 'KRAS') %>% 
-  select(peak, chr, start, end) %>% 
-  mutate(start = start + 1) %>% 
-  merge(select(.data = kras.anno.peaks, peak, chr, start, end), 
-          by = c('chr', 'start', 'end')) -> kras.peak.conversion
-
-znf.peaks <- 
-  kras.anno.peaks %>%
-  rbind(ctrl.anno.peaks) %>% 
-  filter(grepl('ZNF', gene),
-         gene %in% filter(intra.aale.de.seq, log2FoldChange < 0)$gene,
-         grepl('TSS', annotation)) %>% 
-  merge(kras.peak.conversion, by.x = 'peak', by.y = 'peak.y') %>% 
-  merge(intra.aale.de.seq, by = 'gene')
-```  
-### peak file histograms:
-```{r}
-
-
-line1.hist <- gene.set.hist('line1.peak.hist') + theme(axis.text.x = element_blank(),
-                                                       axis.ticks.x = element_blank(),
-                                                       axis.title.x = element_blank(),
-                                                       axis.title.y = element_blank())
-mer.hist <- gene.set.hist('mer.peak.hist')
-patchwork::wrap_plots(list(line1.hist, mer.hist), ncol = 1)
-# ggsave('figures/fig.3/stacked.te.peak.density.2.5x3.5.pdf', height = 2.5, width = 3.5, units = 'in')
-
-
-test.znf.hist <- read_tsv(paste0(atac.dir, 'peak.files/test.znf.hist.txt'),
-                          col_names = c('pos', 'ctrl', 'ctrl_pos', 
-                                        'ctrl_neg', 'kras', 'kras_pos', 'kras_neg'),
-                          skip = 1)
-
-
-
-test.znf.hist <- read_tsv(paste0(atac.dir, 'peak.files/test.znf.hist.txt'),
-                          col_names = c('pos', 'ctrl', 'ctrl_pos', 
-                                        'ctrl_neg', 'kras', 'kras_pos', 'kras_neg'),
-                          skip = 1)
-
-test.znf.hist %>% 
-  select(pos, ctrl, kras) %>% 
-  mutate(`relative ATAC enrichment` = log2((kras + 1) / (ctrl + 1))) %>% 
-  #gather(condition, coverage, -pos) %>% 
-  ggplot(aes(pos/1000, `relative ATAC enrichment`)) + 
-  #geom_point() + 
-  geom_line(alpha = 0.2) + 
-  stat_smooth(geom='line', se = F, color = 'black', alpha = 1) + 
-  geom_hline(yintercept = 0, linetype = 'dashed', alpha = 0.4) + 
-  ylab('rel. ATAC') +     
-  xlab('distance from peaks (kb)')
-
-  
-# ggsave('figures/fig.4/znf.unique.peak.density.1.5x3.25.pdf', height = 1.5, width = 3.25, units = 'in')
 
 ```
 ### Homer merged/unique peaks mergePeaks:
 ```{r}
-
-aale.merged.peaks <- read_tsv(paste0(atac.dir, 'peak.files/aale.merged.homer.peaks'),
-                              col_names = c('name', 'chr', 'start', 'end', 
-                                            'strand', 'stat', 'file', 
-                                            'total_subpeaks', 'ctrl_peak', 'kras_peak'),
-                              skip = 1) %>% 
-  separate_rows(c(name, chr, start, end, strand, stat, file, ctrl_peak, kras_peak), sep = ',') #%>% 
-  merge(kras.anno.peaks, by = c('chr', 'start', 'end'))
-  
-homer.diff.aale.merged.peaks <- read_tsv(paste0(atac.dir, 'peak.files/merged.peaks.diff.tsv'),
-                                         col_names = c('name', 'chr', 'start', 'end', 'strand', 'score',
-                                                       'focus', 'tot.tags', 'bg.tags', 'fc', 'pval'),
-                                         skip = 1) %>% 
-  merge(aale.merged.annotated.peaks, by = 'name') %>% 
-  merge(aale.de.seq, by = 'gene')
-
-ggplot(homer.diff.aale.merged.peaks, aes(fc, diff)) + 
-  geom_point()
-
-
-aale.merged.annotated.peaks <- read_tsv(paste0(atac.dir, 'peak.files/annotated.aale.merged.homer.peaks'),
-                                        col_names = c('name', 'chr', 'start',
-                                                      'end', 'strand', 'score',
-                                                      'focus', 'annotation',
-                                                      'details', 'tss.dist', 'prom.id',
-                                                      'entrez.id', 'unigene', 'refseq',
-                                                      'ensembl', 'gene', 'alias', 'description',
-                                                      'biotype', 'ctrl', 'kras'),
-                                        skip = 1) #%>% 
-  mutate(diff = log2((kras + 0.01 ) / (ctrl + 0.01))) #%>% 
-  filter(gene %in% aale.de.seq$gene, 
-         gene %in% kras.isg.signature)
-
-
-
 kras.unique.peaks <- read_tsv(paste0(atac.dir, 'peak.files/kras.unique.peaks'),
                               col_names = c('name', 'chr', 'start', 'end', 
                                             'strand', 'stat', 'file', 
@@ -675,11 +591,7 @@ kras.unique.peaks <- read_tsv(paste0(atac.dir, 'peak.files/kras.unique.peaks'),
   separate_rows(c(name, chr, start, end, strand, stat, file, other, peak), sep = ',') %>%
   merge(kras.anno.peaks, by = c('peak','chr', 'start', 'end')) %>% 
   separate(annotation, sep = '[(]', into = c('anno', 'explained')) %>% 
-  select(-explained, -other) %>% 
-  filter(gene %in% kras.isg.signature) %>% 
-  select(name, chr, start, end, strand=strand.y, stat, file, total_subpeaks, peak) %>% 
-  write_tsv(paste0(atac.dir, 'peak.files/kras.isg.kras.unique.peaks'))
-
+  select(-explained, -other)
 
 ctrl.unique.peaks <- read_tsv(paste0(atac.dir, 'peak.files/ctrl.unique.peaks'),
                               col_names = c('name', 'chr', 'start', 'end', 
@@ -689,42 +601,22 @@ ctrl.unique.peaks <- read_tsv(paste0(atac.dir, 'peak.files/ctrl.unique.peaks'),
   separate_rows(c(name, chr, start, end, strand, stat, file, other, peak), sep = ',') %>% 
   merge(ctrl.anno.peaks, by = c('peak','chr', 'start', 'end')) %>% 
   separate(annotation, sep = '[(]', into = c('anno', 'explained')) %>% 
-  select(-explained, -other) #%>% 
-  merge(aale.de.seq, by = 'gene')
+  select(-explained, -other)
   
 ctrl.unique.peaks %>% 
-  filter(gene %in% filter(trono.de.krab.znfs, log2fc < -1)$gene) %>% 
+  filter(gene %in% filter(trono.de.krab.znfs, log2fc < -1)$gene) %>%
   select(name, chr, start, end, strand=strand.y, stat, file, total_subpeaks, peak) %>% 
-  filter(chr == 'chr19') %>% 
-  #write_tsv(paste0(atac.dir, 'peak.files/de.znf.ctrl.unique.peaks'))
-  write_tsv(paste0(atac.dir, 'peak.files/chr19.down.znf.ctrl.unique.peaks'))
+  # filter(chr == 'chr19') #%>% 
+  write_tsv(paste0(atac.dir, 'peak.files/ctrl.unique.dn.znf.peaks'))
+  # write_tsv(paste0(atac.dir, 'peak.files/chr19.down.znf.ctrl.unique.peaks'))
 
 combined.unique.peaks <- rbind(kras.unique.peaks, ctrl.unique.peaks)
 
 combined.unique.peaks %>% 
-  filter(gene %in% filter(trono.krab.znfs, gene %in% aale.de.seq$gene)$gene) %>% 
-  select(chr, start, end, name, strand = strand.x, score, gene, condition, anno) #%>% 
-  #write_tsv(paste0(atac.dir, 'peak.files/unique.znf.peaks.file'))
-
-ggplot(combined.unique.peaks %>% filter(gene %in% rig.i.mda5.induction,
-                                        abs(tss.dist) <= 1500),
-       aes(condition, fill = anno, label = gene)) + 
-  geom_bar() + 
-  scale_fill_viridis_d()
-
-ggplot(combined.unique.peaks %>% 
-         filter(gene %in% kras.isg.signature, abs(tss.dist) <= 1000) %>% 
-         gather(),
-       aes(anno, y = (..count..), fill = condition)) + 
-  geom_violin()
-  # geom_bar() + 
-  # scale_fill_viridis_d() + 
-  # geom_hline(yintercept = seq(0,10, 2), color = 'white', size = rel(1))
-
-
-combined.unique.peaks %>% 
-  filter(gene %in% kras.isg.signature, abs(tss.dist) <= 1000) %>% 
-  group_by(condition, tss.dist, anno)
+  filter(gene %in% filter(trono.de.krab.znfs, log2fc < -1)$gene) %>%
+  select(name, chr, start, end, strand=strand.y, stat, file, total_subpeaks, peak) %>% 
+  # filter(chr == 'chr19') #%>% 
+  write_tsv(paste0(atac.dir, 'peak.files/total.unique.dn.znf.peaks'))
 ```
 ### Merged peaks from annoPeaks
 ```{r}
@@ -1226,7 +1118,40 @@ kras.isg.motifs %>%
 
 ### A: TE volcano
 ```{r}
+plot.te.volcano <- function(quant.file) {
+  #quant.file <- merge(quant.file, znf.names, by.x = 'Gene', by.y = 'V1')
+  ggplot(quant.file, aes(y=-log10(qval),
+                     x=log2fc,
+         color = clade)) +
+    theme(axis.line = element_blank()) + 
+  geom_point(size = rel(1), alpha = 0.5) + 
+  geom_rug(size = rel(0.5),length = unit(rel(0.1), 'cm'), alpha = 0.3) + 
+  scale_x_continuous(limits = c(-6, 6)) +
+  #scale_y_continuous(limits = c(0,-log10(min(aale.de.seq$padj)))) #+
+  xlab('log2(Fold Change)') +
+  ylab('-log10(qval)') + 
+  geom_hline(yintercept = -log10(0.05), linetype='dotted', alpha = 0.4) +
+  geom_vline(xintercept = 0, linetype='dotted', alpha = 0.4) +
+  geom_hline(yintercept = -log10(0.05), linetype='dotted', alpha = 0.4) +
+  geom_vline(xintercept = c(-1,0,1), linetype='dotted', alpha = 0.4) +
+  scale_color_viridis_d(name = 'clade') + 
+  #facet_wrap(~approach, ncol = 1) +
+  ggrepel::geom_text_repel(aes(label = ifelse(abs(log2fc) > 2,
+                                       as.character(te), '')),
+                         box.padding = unit('0.5', 'lines'),
+                         segment.color = 'gray',
+                         segment.alpha = 0.2,
+                         color = 'black',
+                         ylim = c(0.5, Inf), size = rel(2.5))
+}
 
+plot.te.volcano(total.sleuth.out)
+plot.te.volcano(aale.te.de.seq %>% rename(te = 'Gene') %>% merge(te.clades.merge, by = 'te'))
+te.aale.sleuth.plt <- 
+  plot.te.volcano(total.sleuth.out %>% filter(approach == 'te-only')) + 
+  theme(legend.position = 'null')
+# ggsave(plot = te.aale.sleuth.plt, '../figures/fig.3/te-only.aale.te.volcano.2.5x3.5.pdf', 
+#        height = 2.5, width = 3.5, units = 'in')
 ```
 ### B: TE gene set single cell volcanos
 ```{r}
@@ -1293,28 +1218,7 @@ patchwork::wrap_plots(list(l1mc4a.vln, alusx.vln), ncol = 2)
 ```
 ### E: RNA editing in single cells
 ```{r}
-rna.edit.path <- '../data/bulk.rna.seq/aale/output/rna.editing.out/'
-rna.edit.path <- '../data/single.cell.rna.seq/output/rna.editing.out/'
-rna.edit.path <- '../data/single.cell.rna.seq/output/subset.rna.editing.out/'
-
-plot.editing.matrix <- function(editing.path){
-  return(read_csv(paste0(rna.edit.path,paste0(editing.path,'/summary_dir/EditingIndex.csv'))) %>% 
-  filter(StrandDecidingMethod == 'RefSeqThenMMSites') %>% 
-  select(sample=Sample, signal=A2GEditingIndex, noise=C2TEditingIndex) %>% 
-  separate(sample, c(NA, 'cluster', NA), '[.]') %>% 
-  ggplot(aes(cluster, y = signal, 
-             color = cluster)) + 
-  geom_point(size = 2.42) +
-  geom_point(aes(cluster, noise), shape = 'diamond') +
-  scale_color_manual(values = c(viridis(12, option = 'plasma')[1],
-                 viridis(12, option = 'inferno')[2],
-                 viridis(12, option = 'D')[5],
-                 viridis(12, option = 'plasma')[7],
-                 viridis(12, option = 'inferno')[9]))
-  )
-}
-
-alu.edit.out <- plot.editing.matrix('sleuth.alu.bed') + xlab('alu')
+rna.edit.path <- 'data/single.cell.rna.seq/output/subset.rna.editing.out/'
 
 subset.alu.editing.out <- read_csv(paste0(rna.edit.path, 
                                           'sleuth.alu.bed/summary_dir/EditingIndex.csv')) %>% 
@@ -1336,81 +1240,17 @@ subset.alu.editing.out <- read_csv(paste0(rna.edit.path,
                                   c('4', '2'),
                                   c('4', '3')),
               color = 'black',
-              test = 'wilcox.test', test.args = list(alternative='greater', paired=FALSE),
-              step_increase = 0.1, 
+              test = 't.test', test.args = list( paired=FALSE),
+              step_increase = 0.075, 
               size = rel(0.25), inherit.aes = T, textsize = rel(2)) +
   geom_point(aes(cluster, noise), shape = 'diamond', size = rel(1), alpha = 0.5) + 
-  xlab('') + ylab('A-to-G Editing Index') + 
+  xlab('') + ylab('A-to-I Editing') + 
   scale_y_continuous(limits = c(0,7), breaks = c(0,1,3,2,4)) +
   theme(plot.margin=margin(-25,-0.5,-2,2,unit = "mm"),
-        legend.box.margin=margin(0,0,0,-6,unit = "mm"),
-        axis.title.y = element_text(hjust = -1e-90))
+        legend.box.margin=margin(0,0,0,-6,unit = "mm")) + 
+  theme(axis.title.y = element_text(vjust = 1))
 
-ggsave('../figures/fig.3/subset.sc.editing.2.5x3.25.pdf', height = 2.5, width = 3.25, units = 'in')
-
-
-line1.edit.out <- plot.editing.matrix('sleuth.line1.bed') + xlab('line1')
-
-mer.edit.out <- 
-  read_csv(paste0(rna.edit.path,'sleuth.mer.bed/summary_dir/EditingIndex.csv')) %>% 
-  filter(StrandDecidingMethod == 'RefSeqThenMMSites') %>% 
-  select(sample=Sample, signal=A2GEditingIndex, noise=C2TEditingIndex) %>% 
-  separate(sample, c('condition', 'rep', NA), '[.]') %>% 
-  ggplot(aes(condition, signal)) +
-  geom_boxplot() +
-  geom_point() +
-  xlab('mer') + 
-  facet_wrap(~rep)
-
-
-alu.edit.out <- 
-  read_csv(paste0(rna.edit.path,'sleuth.alu.bed/summary_dir/EditingIndex.csv')) %>% 
-  filter(StrandDecidingMethod == 'RefSeqThenMMSites') %>% 
-  select(sample=Sample, signal=A2GEditingIndex, noise=C2TEditingIndex) %>% 
-  separate(sample, c(NA, 'cluster', NA), '[.]') %>% 
-  ggplot(aes(cluster, y = signal, 
-             color = cluster)) + 
-  geom_boxplot(size = rel(0.5)) +
-  geom_point(size = rel(0.5)) +
-  geom_point(inherit.aes = T, aes(cluster, noise), shape = 'diamond') +
-  scale_color_manual(values = c(viridis(12, option = 'plasma')[1],
-                 viridis(12, option = 'inferno')[2],
-                 viridis(12, option = 'D')[5],
-                 viridis(12, option = 'plasma')[7],
-                 viridis(12, option = 'inferno')[9])) +
-
-  xlab('alu')
-
-ltr.edit.out <- 
-  read_csv(paste0(rna.edit.path,'sleuth.ltr.bed/summary_dir/EditingIndex.csv')) %>% 
-  filter(StrandDecidingMethod == 'RefSeqThenMMSites') %>% 
-  select(sample=Sample, signal=A2GEditingIndex, noise=C2TEditingIndex) %>% 
-  separate(sample, c('condition', 'rep', NA), '[.]') %>% 
-  ggplot(aes(condition, signal)) + 
-  geom_boxplot() + 
-  geom_point()+ 
-  xlab('ltr') + 
-  facet_wrap(~rep)
-line1.edit.out <- 
-  read_csv(paste0(rna.edit.path,'sleuth.line1.bed/summary_dir/EditingIndex.csv')) %>% 
-  filter(StrandDecidingMethod == 'RefSeqThenMMSites') %>% 
-  select(sample=Sample, signal=A2GEditingIndex, noise=C2TEditingIndex) %>% 
-  separate(sample, c('condition', 'rep', NA), '[.]') %>% 
-  ggplot(aes(condition, signal)) + 
-  geom_boxplot() + 
-  geom_point()+ 
-  xlab('line1') + 
-  facet_wrap(~rep)
-total.edit.out <- 
-  read_csv(paste0(rna.edit.path,'hg38.out/summary_dir/EditingIndex.csv')) %>% 
-  filter(StrandDecidingMethod == 'RefSeqThenMMSites') %>% 
-  select(sample=Sample, signal=A2GEditingIndex, noise=C2TEditingIndex) %>% 
-  separate(sample, c('condition', 'cluster', NA), '[.]') %>% 
-  ggplot(aes(cluster, signal)) + 
-  geom_boxplot() + 
-  geom_point()+ 
-  xlab('line1')
-mer.edit.out + alu.edit.out + ltr.edit.out + line1.edit.out
+#ggsave('figures/fig.3/subset.sc.editing.3x3.25.pdf', height = 3, width = 3.25, units = 'in')
 ```
 
 ## Figure 4:
@@ -1450,24 +1290,9 @@ znf.aale.de.seq
 ### B: 
 #### ATAC histogram:
 ```{r}
-test.znf.hist <- read_tsv(paste0(atac.dir, 'peak.files/test.znf.hist.txt'),
-                          col_names = c('pos', 'ctrl', 'ctrl_pos', 
-                                        'ctrl_neg', 'kras', 'kras_pos', 'kras_neg'),
-                          skip = 1)
+gene.set.hist('total.unique.dn.znf.peak.hist')
 
-test.znf.hist %>% 
-  select(pos, ctrl, kras) %>% 
-  mutate(`relative ATAC enrichment` = log2((kras + 1) / (ctrl + 1))) %>% 
-  #gather(condition, coverage, -pos) %>% 
-  ggplot(aes(pos/1000, `relative ATAC enrichment`)) + 
-  #geom_point() + 
-  geom_line(alpha = 0.2) + 
-  stat_smooth(geom='line', se = F, color = 'black', alpha = 1) + 
-  geom_hline(yintercept = 0, linetype = 'dashed', alpha = 0.4) + 
-  ylab('rel. ATAC') +     
-  xlab('distance from peaks (kb)')
-
-# ggsave('figures/fig.4/znf.unique.peak.density.1.5x3.25.pdf', height = 1.5, width = 3.25, units = 'in')
+ggsave('../figures/fig.4/znf.unique.peak.density.1.5x3.25.pdf', height = 1.5, width = 3.25, units = 'in')
 
 ```
 #### CTRL unique ZNF peaks
