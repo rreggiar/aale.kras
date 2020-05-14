@@ -37,7 +37,7 @@ suppressPackageStartupMessages({
   library(patchwork)
   library(fgsea)
   library(msigdbr)
-  #library(Hmisc)
+  library(gtsummary)
   library(SingleCellExperiment)
   library(tximport)
   library(Seurat)
@@ -319,8 +319,20 @@ JackStrawPlot(kras.aale.sc, dims = 1:20)
 
 ElbowPlot(kras.aale.sc)
 ```
+### clustering
+```{r}
+## run clustering via suerat with manually determined args
+set.seed(431)
+# knn, umap
+kras.aale.sc <- FindNeighbors(kras.aale.sc, dims = 1:10)
+kras.aale.sc <- FindClusters(kras.aale.sc, resolution = 0.6)
+kras.aale.sc <- RunUMAP(kras.aale.sc, dims = 1:10)
+# assess QC features on a cluster-to-cluster basis to detect bias
+VlnPlot(kras.aale.sc, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"))
+
+```
 ### tidying normalized counts
-```{r, include=FALSE}
+```{r}
 # extract scaled, normalized counts
 kras.aale.sc.norm.counts <- as.data.frame(as.matrix(kras.aale.sc[["RNA"]]@scale.data))
 # extract barcodes
@@ -513,7 +525,7 @@ aale.anno.peaks <-
   rbind(ctrl.anno.peaks,
         kras.anno.peaks)
 ```
-## collapsed and merged peaks for comparison:
+### collapsed and merged peaks for comparison:
 ```{r}
 collapse.peaks <- read_tsv(paste0(atac.dir, 'peak.files/aale.collapse.merge.sort.peak.bed'), 
                            col_names = c('chr', 'start', 'end', 
@@ -566,18 +578,18 @@ aale.anno.collapsed.peaks <-
   separate(annotation, sep = '[(]', into = c('anno', 'explained')) %>% 
   separate(explained, sep = '[)]', into = c('motif.type', NA))
 
-aale.anno.collapsed.peaks %>% 
-  filter(gene %in% filter(trono.de.krab.znfs, log2fc < 2)$gene) %>%
-  select(peak, chr, start, end, strand, score, gene, condition, anno) %>% 
-  write_tsv(paste0(atac.dir, 'peak.files/total.znf.dn.peaks.file'))
-
-ctrl.anno.collapsed.peaks %>% 
-  unique() %>% 
-  separate(annotation, sep = '[(]', into = c('anno', 'explained')) %>% 
-  separate(explained, sep = '[)]', into = c('motif.type', NA)) %>% 
-  filter(gene %in% filter(trono.de.krab.znfs, log2fc < -2)$gene) %>%
-  select(peak, chr, start, end, strand, score, gene, condition, anno) %>% 
-  write_tsv(paste0(atac.dir, 'peak.files/total.znf.dn.peaks.file'))
+# aale.anno.collapsed.peaks %>% 
+#   filter(gene %in% filter(trono.de.krab.znfs, log2fc < 2)$gene) %>%
+#   select(peak, chr, start, end, strand, score, gene, condition, anno) %>% 
+#   write_tsv(paste0(atac.dir, 'peak.files/total.znf.dn.peaks.file'))
+# 
+# ctrl.anno.collapsed.peaks %>% 
+#   unique() %>% 
+#   separate(annotation, sep = '[(]', into = c('anno', 'explained')) %>% 
+#   separate(explained, sep = '[)]', into = c('motif.type', NA)) %>% 
+#   filter(gene %in% filter(trono.de.krab.znfs, log2fc < -2)$gene) %>%
+#   select(peak, chr, start, end, strand, score, gene, condition, anno) #%>% 
+#   # write_tsv(paste0(atac.dir, 'peak.files/total.znf.dn.peaks.file'))
 
 
 ```
@@ -606,35 +618,44 @@ ctrl.unique.peaks <- read_tsv(paste0(atac.dir, 'peak.files/ctrl.unique.peaks'),
 ctrl.unique.peaks %>% 
   filter(gene %in% filter(trono.de.krab.znfs, log2fc < -1)$gene) %>%
   select(name, chr, start, end, strand=strand.y, stat, file, total_subpeaks, peak) %>% 
-  # filter(chr == 'chr19') #%>% 
   write_tsv(paste0(atac.dir, 'peak.files/ctrl.unique.dn.znf.peaks'))
-  # write_tsv(paste0(atac.dir, 'peak.files/chr19.down.znf.ctrl.unique.peaks'))
 
 combined.unique.peaks <- rbind(kras.unique.peaks, ctrl.unique.peaks)
-
-combined.unique.peaks %>% 
-  filter(gene %in% filter(trono.de.krab.znfs, log2fc < -1)$gene) %>%
-  select(name, chr, start, end, strand=strand.y, stat, file, total_subpeaks, peak) %>% 
-  # filter(chr == 'chr19') #%>% 
-  write_tsv(paste0(atac.dir, 'peak.files/total.unique.dn.znf.peaks'))
 ```
 ### Merged peaks from annoPeaks
 ```{r}
-kras.isg.motifs <- read_tsv(paste0(atac.dir, 'peak.files/kras.isg.motifs.txt')) %>% 
+kras.isg.motifs <- 
+  read_tsv(paste0(atac.dir, 'peak.files/kras.isg.motifs.txt')) %>% 
+  select_if(function(x) sum(!is.na(x)) >= 4) %>% 
+  select(-contains('FOXA1'),
+         -contains('FoxL2'),
+         -contains('Nearest'),
+         -contains('bHLH'),
+         -contains('STAT6'),
+         -contains('Nr5a2'),
+         -contains('Pit1'),
+         -contains('AP-2'),
+         -`Not Used`, -`Gene Description`, -`Gene Alias`) %>%
+  rename('Gene Type' = 'biotype') %>%
+  dplyr::rename_at(.vars = vars(contains('(')),
+            .funs = funs(vapply(str_split(., pattern = '[(]', n = 3), '[', '', 1))) %>%
   janitor::clean_names() %>% 
-  select_if(function(x) any(!is.na(x))) %>% 
-  rename_at(.vars = vars(contains('_')),
-            .funs = funs(vapply(str_split(., pattern = '_', n = 2), '[', '', 1))) %>% 
-  janitor::clean_names() %>%
-  gather(motif, detail, -peak:-kras) %>% 
-  separate_rows(peak:detail, sep = '[)],') %>% 
+  select(-starts_with('n_'),
+         -starts_with('b_'),
+         -starts_with('ro_'),
+         -starts_with('c_'),
+         -starts_with('ar_')) %>% 
+  rename('kras_label_narrow_peak_tag_tag_count_in_1250_bp' = 'kras',
+         'ctrl_label_narrow_peak_tag_tag_count_in_1250_bp' = 'ctrl') %>% 
+  gather(motif, detail, -peak_id:-kras)%>% 
+  separate_rows(peak_id:detail, sep = '[)],') %>% 
   filter(!is.na(detail)) %>% 
   separate(detail, sep = '[(]', into = c('tss.dist', 'sequence')) %>% 
   separate(sequence, sep = ',', into = c('sequence', 'motif.strand', 'conservation')) %>% 
   filter(strand == motif.strand) %>% 
   mutate(motif = toupper(motif),
          motif = ifelse(motif == 'ISRE', 'IRF9', motif),
-         motif = ifelse(motif == 'AP', 'FOS', motif),
+         motif = ifelse(motif == 'AP_1', 'FOS', motif),
          kras = as.numeric(kras), ctrl = as.numeric(ctrl), tss.dist = as.numeric(tss.dist)) %>% 
   select(-conservation) %>% 
   filter(motif %in% aale.de.seq$gene) %>% 
@@ -784,8 +805,8 @@ make.fgsea.ranks <- function(de.seq){
   rm(de.seq, de.seq.rnk, de.seq.fgsea.res, de.seq.fgsea.df)
 }
 
-aale.rnk.df <- make.fgsea.ranks(aale.de.seq %>% padj > 0)
-ha1e.rnk.df <- make.fgsea.ranks(ha1em.de.seq %>%  padj > 0)
+aale.rnk.df <- make.fgsea.ranks(aale.de.seq %>% filter(padj > 0))
+ha1e.rnk.df <- make.fgsea.ranks(ha1em.de.seq %>%  filter(padj > 0))
   
 aale.rnk.df %>% 
   mutate(condition = 'aale') %>% 
@@ -810,7 +831,7 @@ aale.rnk.df %>%
 temp.vd <- venn.diagram(
   x = list(
     kras.isg.signature %>% unlist(),
-    liu.isg.sig %>% unlist(),
+    liu.isg.signature %>% unlist(),
     msig.df.h.ifna %>% unlist(),
     msig.df.h.ifng %>% unlist()),
   category.names = c('','','',''),
@@ -837,15 +858,6 @@ grid.draw(temp.vd)
 ```
 ### D: Single Cell UMAP -- Suerat
 ```{r}
-## run clustering via suerat with manually determined args
-set.seed(431)
-# knn, umap
-kras.aale.sc <- FindNeighbors(kras.aale.sc, dims = 1:10)
-kras.aale.sc <- FindClusters(kras.aale.sc, resolution = 0.6)
-kras.aale.sc <- RunUMAP(kras.aale.sc, dims = 1:10)
-# assess QC features on a cluster-to-cluster basis to detect bias
-VlnPlot(kras.aale.sc, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"))
-
 # note that you can set `label = TRUE` or use the LabelClusters function to help label
 # individual clusters
 DimPlot(kras.aale.sc, 
@@ -870,8 +882,7 @@ make.gene.set.vln <- function(name){
   name <- deparse(substitute(name))
 
   return(VlnPlot(gene.set.kras.aale.sc, 
-        features = `name`, 
-        nrow = 1, pt.size = 0, size = 0.5, 
+        features = `name`,pt.size = 0.5, 
         cols = c(viridis(12, option = 'plasma')[1],
                  viridis(12, option = 'inferno')[2],
                  viridis(12, option = 'D')[5],
@@ -901,6 +912,28 @@ patchwork::wrap_plots(list(kras.signal.up.vln,liu.isg.vln, msig.df.h.ifna.vln,kr
 ```
 ### F: Cluster 4 marker gene heatmap:
 ```{r}
+## use seurat functionality to isolate 'marker genes' from each cluster
+kras.aale.sc.markers <- 
+  FindAllMarkers(kras.aale.sc, 
+                 only.pos = F, 
+                 min.pct = 0.05, 
+                 logfc.threshold = 0.25) %>% 
+  filter(p_val_adj < 0.01)
+# filter down to the top 5 most significant markers per cluster
+kras.aale.sc.markers.heatmap <- 
+  kras.aale.sc.markers %>% 
+  group_by(cluster) %>% 
+  top_n(n = 5, wt = -p_val) 
+# filter down to the top 10 most sig in cluster 4
+kras.aale.sc.markers %>% 
+  group_by(cluster) %>% 
+  top_n(n = 10, wt = avg_logFC) %>% 
+  filter(cluster %in% c(4)) %>%
+  ungroup() %>% 
+  select(gene) %>%
+  unname() %>% 
+  unlist() -> isg.markers
+
 ## transform count matrix into a tidy data set to plot cluster v count
 isg.heatmap.norm.counts.plot <- 
   kras.aale.sc.norm.counts %>% 
@@ -920,27 +953,27 @@ isg.anno.colors <- list(cluster = c(`0` = viridis(12, option = 'plasma')[1],
                  `3` = viridis(12, option = 'plasma')[7],
                  `4` = viridis(12, option = 'inferno')[9]))
 # pheatmap
-isg.marker.heatm <- 
-  isg.heatmap.norm.counts.plot %>%
-  gather(gene, count, -barcode, -cluster) %>% 
-  mutate(gene = ifelse(gene == 'DDX58', 'RIG-I', gene),
-         gene = ifelse(gene == 'IFIH1', 'MDA5', gene)) %>% 
-  group_by(cluster, gene) %>% 
-  summarise(mean.count = mean(count)) %>% 
-  ungroup() %>% 
-  mutate(mean.count = log2(mean.count + 1)) %>% 
-  filter(!is.na(mean.count)) %>% 
-  spread(cluster, mean.count) %>% 
-  column_to_rownames('gene') %>% 
-  pheatmap::pheatmap(color = viridis(512), 
-                     border_color = NA, 
-                     treeheight_col = 7, 
-                     treeheight_row = 7,
-                     fontsize = 7,
-                     show_colnames = F,
-                     width = 3.5, height = 2, angle_col = 0,
-                     annotation = isg.anno.df,
-                     annotation_colors = isg.anno.colors) 
+# isg.marker.heatm <- 
+#   isg.heatmap.norm.counts.plot %>%
+#   gather(gene, count, -barcode, -cluster) %>% 
+#   mutate(gene = ifelse(gene == 'DDX58', 'RIG-I', gene),
+#          gene = ifelse(gene == 'IFIH1', 'MDA5', gene)) %>% 
+#   group_by(cluster, gene) %>% 
+#   summarise(mean.count = mean(count)) %>% 
+#   ungroup() %>% 
+#   mutate(mean.count = log2(mean.count + 1)) %>% 
+#   filter(!is.na(mean.count)) %>% 
+#   spread(cluster, mean.count) %>% 
+#   column_to_rownames('gene') %>% 
+#   pheatmap::pheatmap(color = viridis(512), 
+#                      border_color = NA, 
+#                      treeheight_col = 7, 
+#                      treeheight_row = 7,
+#                      fontsize = 7,
+#                      show_colnames = F,
+#                      width = 3.5, height = 2, angle_col = 0,
+#                      annotation = isg.anno.df,
+#                      annotation_colors = isg.anno.colors) 
 
 # save_pheatmap_pdf(isg.marker.heatm, 'figures/fig.1/updated.isg.marker.heat.pdf', height = 2, width = 3.5)
 ```
@@ -971,8 +1004,7 @@ make.gene.vln <- function(name){
   name <- deparse(substitute(name))
 
   return(VlnPlot(gene.set.kras.aale.sc,
-        features = c(`name`), 
-        nrow = 1, pt.size = 0.002, size = 0.5, 
+        features = c(`name`),  pt.size = 0.002, 
         cols = c(viridis(12, option = 'plasma')[1],
                  viridis(12, option = 'inferno')[2],
                  viridis(12, option = 'D')[5],
@@ -980,8 +1012,6 @@ make.gene.vln <- function(name){
                  viridis(12, option = 'inferno')[9],
                  viridis(12, option = 'D')[11])) + 
   xlab('') + 
-  vln_theme() + 
-  
   theme(legend.position = 'null',
         plot.margin =  margin(-6,0,-3,0,unit = "mm")))
 
@@ -1032,7 +1062,7 @@ cell.Titer %>%
               size = rel(0.25), inherit.aes = T, textsize = rel(2), 
               color = 'black') + 
   scale_x_discrete(limits=c('siCTRL','siKRAS', 'siMDA5', 'siRIG-I')) + 
-  xlab('') + scale_y_continuous(limits = c(2,6.5)) + set_my_theme() + 
+  xlab('') + scale_y_continuous(limits = c(2,6.5)) + set_aale_theme() + 
   theme(plot.margin =  margin(-2,-.25,-.25,1,unit = "mm")) + 
   ylab('cell viability (ATP)')
                          
@@ -1109,8 +1139,8 @@ kras.isg.motifs %>%
   unique() %>% 
   plot.tf.volcano() -> kras.isg.motifs.volcano
 
-# ggsave(plot = kras.isg.motifs.volcano, 'figures/fig.2/updated.kras.isg.volcano.2.5x3.5.pdf', 
-       # height = 2.5, width = 3.5, units = 'in')
+ggsave(plot = kras.isg.motifs.volcano, 'figures/fig.2/updated.kras.isg.volcano.2.3x3.2.pdf', 
+       height = 2.3, width = 3.2, units = 'in')
 
 ```
 
@@ -1145,8 +1175,8 @@ plot.te.volcano <- function(quant.file) {
                          ylim = c(0.5, Inf), size = rel(2.5))
 }
 
-plot.te.volcano(total.sleuth.out)
-plot.te.volcano(aale.te.de.seq %>% rename(te = 'Gene') %>% merge(te.clades.merge, by = 'te'))
+# plot.te.volcano(total.sleuth.out)
+# plot.te.volcano(aale.te.de.seq %>% rename(te = 'Gene') %>% merge(te.clades.merge, by = 'te'))
 te.aale.sleuth.plt <- 
   plot.te.volcano(total.sleuth.out %>% filter(approach == 'te-only')) + 
   theme(legend.position = 'null')
@@ -1195,8 +1225,7 @@ make.gene.vln <- function(name){
   name <- deparse(substitute(name))
 
   return(VlnPlot(gene.set.kras.aale.sc,
-        features = c(`name`), 
-        nrow = 1, pt.size = 0.02, pt.alpha = 0., size = 0.5, 
+        features = c(`name`), pt.size = 0.02, 
         cols = c(viridis(12, option = 'plasma')[1],
                  viridis(12, option = 'inferno')[2],
                  viridis(12, option = 'D')[5],
@@ -1204,7 +1233,6 @@ make.gene.vln <- function(name){
                  viridis(12, option = 'inferno')[9],
                  viridis(12, option = 'D')[11])) + 
   xlab('') + 
-  vln_theme() + 
   #scale_y_continuous(limits = c(-0.01,1.3)) + 
   theme(legend.position = 'null',
         plot.margin =  margin(-6,0,-3,0,unit = "mm")))
@@ -1218,7 +1246,7 @@ patchwork::wrap_plots(list(l1mc4a.vln, alusx.vln), ncol = 2)
 ```
 ### E: RNA editing in single cells
 ```{r}
-rna.edit.path <- 'data/single.cell.rna.seq/output/subset.rna.editing.out/'
+rna.edit.path <- '../data/single.cell.rna.seq/output/subset.rna.editing.out/'
 
 subset.alu.editing.out <- read_csv(paste0(rna.edit.path, 
                                           'sleuth.alu.bed/summary_dir/EditingIndex.csv')) %>% 
