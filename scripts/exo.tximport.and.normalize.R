@@ -27,9 +27,9 @@ sample.info <- data.frame('sample' = character(),
 
 
 sample.info.list <- lapply(files, function(x){
-            x.split <- str_split(x, '[.]', n = 2)[[1]]
-            condition <- x.split[1]
-            rep <- x.split[2]
+            x.split <- str_split(x, '[.]', n = 3)[[1]]
+            condition <- x.split[2]
+            rep <- x.split[3]
             temp.df <- data.frame('sample' = x,
                                   'condition' = condition,
                                   'rep' = rep)
