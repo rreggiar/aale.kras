@@ -16,10 +16,10 @@ library(readr)
 
 paths.in <- scan(file=file("stdin", "r"), what="character")
 paths <- paths.in[1]
-tx2genepath <- '/public/groups/kimlab/genomes.annotations/gen.32.ucsc.rmsk.tx.2.gene.csv'
+tx2genepath <- '/public/groups/kimlab/genomes.annotations/gencode.32/gen.32.ucsc.rmsk.tx.2.gene.csv'
 files <- dir(file.path(paths))
 print(files)
-names(files)<- files
+names(files) <- files
 
 sample.info <- data.frame('sample' = character(),
                           'condition' = character(),
