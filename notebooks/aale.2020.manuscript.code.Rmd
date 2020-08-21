@@ -1,7 +1,7 @@
 ---
 title: "KRAS AALE Manuscript code 2020"
 author: 'Roman E. Reggiardo'
-date: '04/29/2020'
+date: '05/15/2020'
 output: html_document
 editor_options: 
   chunk_output_type: inline
@@ -135,6 +135,8 @@ liu.isg.signature <- c('ADAR', 'DDX60', 'HERC6', 'IRF7', 'OASL', 'PSM2', 'STAT2'
                        'RTP4', 'TRAFD1', 'USP18', 'CMPK2', 'EPSTI1', 'IFIT2', 'MX1', 'PARP14', 'SAMD9L', 'TRIM14',
                        'CXCL10', 'GBP4', 'IFIT3', 'NMI', 'PNPT1', 'SP110', 'TRIM21')
 
+gen.32.lnc <- read_table('../data/other/wetlab/gen.32.pure.lnc.names', col_names = 'gene')
+
 gs.names = c("KRAS ISG SIGNATURE" , 
              "LIU ISG SIGNATURE" ,
              'HALLMARK IFNA RESPONSE',
@@ -226,6 +228,22 @@ trono.de.krab.znfs <- read_csv('../data/other/wetlab/all.human.znf.trono.db.csv'
          anno = gsub('[)]', '', anno)) %>%
   rbind(zscan18.row) %>%
   merge(aale.de.seq, by = 'gene')
+
+ha1em.trono.de.krab.znfs <- read_csv('../data/other/wetlab/all.human.znf.trono.db.csv',
+                            col_names = c('gene', 'biotype', 'ensg', 'chr',
+                                          'start', 'end', 'strand', 'anno')) %>%
+  mutate(anno = gsub('s','', anno),
+         anno = gsub('[(]', '', anno),
+         anno = gsub('[)]', '', anno)) %>%
+  rbind(zscan18.row) %>%
+  merge(ha1em.de.seq, by = 'gene')
+
+
+exo.aale.de.seq <- read_csv('../data/bulk.rna.seq/aale/output/exo.gencode.de.seq.csv') %>% 
+  filter(padj < 0.01)
+names(exo.aale.de.seq) <- c('gene', 'baseMean', 'log2fc', 'lfcse', 'pval', 'padj')
+
+
 ```
 ### Sleuth -- TEs
 ```{r}
@@ -256,6 +274,17 @@ aale.combined.sleuth.out <-
   separate(strand, sep = '_', into = c('strand', NA)) %>% 
   merge(te.clades.merge, by = 'te') %>% 
   mutate(approach = 'combined')
+
+ha1em.sleuth.out <- read_csv('../data/bulk.rna.seq/ha1em/output/quant.data.log2fc.csv') %>% 
+  filter(qval <= 0.05) %>% 
+  separate(Name, sep = '=', into = c('te', 'position', NA, NA, 'strand', NA)) %>% 
+  separate(position, sep = '_', into = c('pos', NA)) %>% 
+  separate(pos, sep = ':', into = c('chr', 'startend')) %>% 
+  separate(startend, sep = '-', into = c('start', 'stop')) %>% 
+  separate(strand, sep = '_', into = c('strand', NA)) %>% 
+  separate(te, sep = '_', into = c(NA, NA, 'te', NA)) %>% 
+  merge(te.clades.merge, by = 'te') %>% 
+  mutate(approach = 'te-only')
 
 total.sleuth.out <- rbind(aale.sleuth.out, aale.combined.sleuth.out)
 
@@ -662,6 +691,7 @@ kras.isg.motifs <-
   merge(aale.de.seq, by.x = 'motif', by.y = 'gene')
 ```
 
+
 # Figures
 
 ## Figure 1:
@@ -704,8 +734,13 @@ plot.isg.volcano <- function(quant.file) {
 
 isg.aale.de.seq <- plot.isg.volcano(aale.de.seq)
 isg.aale.de.seq
+# isg.ha1e.de.seq <- plot.isg.volcano(ha1em.de.seq)
+# isg.ha1e.de.seq
 # ggsave(plot = isg.aale.de.seq, 
 #        '../figures/fig.1/updated.isg.volcano.2.5x3.5.pdf', 
+#        height = 2.5, width = 3.5, units = 'in')
+# ggsave(plot = isg.ha1e.de.seq,
+#        '../figures/fig.1/ha1em.updated.isg.volcano.2.5x3.5.pdf',
 #        height = 2.5, width = 3.5, units = 'in')
 
 ```
@@ -1138,9 +1173,9 @@ kras.isg.motifs %>%
   select(motif, log2fc, padj) %>% 
   unique() %>% 
   plot.tf.volcano() -> kras.isg.motifs.volcano
-
-ggsave(plot = kras.isg.motifs.volcano, 'figures/fig.2/updated.kras.isg.volcano.2.3x3.2.pdf', 
-       height = 2.3, width = 3.2, units = 'in')
+kras.isg.motifs.volcano
+# ggsave(plot = kras.isg.motifs.volcano, '../figures/fig.2/updated.kras.isg.volcano.2.3x3.2.pdf', 
+#         height = 2.3, width = 3.2, units = 'in')
 
 ```
 
@@ -1180,7 +1215,15 @@ plot.te.volcano <- function(quant.file) {
 te.aale.sleuth.plt <- 
   plot.te.volcano(total.sleuth.out %>% filter(approach == 'te-only')) + 
   theme(legend.position = 'null')
+te.aale.sleuth.plt
 # ggsave(plot = te.aale.sleuth.plt, '../figures/fig.3/te-only.aale.te.volcano.2.5x3.5.pdf', 
+#        height = 2.5, width = 3.5, units = 'in')
+
+te.ha1em.sleuth.plt <- 
+  plot.te.volcano(ha1em.sleuth.out %>% filter(approach == 'te-only')) + 
+  theme(legend.position = 'null')
+te.ha1em.sleuth.plt
+# ggsave(plot = te.ha1em.sleuth.plt, '../figures/fig.3/te-only.ha1em.te.volcano.2.5x3.5.pdf',
 #        height = 2.5, width = 3.5, units = 'in')
 ```
 ### B: TE gene set single cell volcanos
@@ -1280,6 +1323,41 @@ subset.alu.editing.out <- read_csv(paste0(rna.edit.path,
 
 #ggsave('figures/fig.3/subset.sc.editing.3x3.25.pdf', height = 3, width = 3.25, units = 'in')
 ```
+### F:
+```{r}
+
+```
+### G:
+```{r}
+rna.edit.path <- '../data/bulk.rna.seq/aale/output/exo.sleuth.alu.edit.out/'
+
+subset.alu.editing.out <- read_csv(paste0(rna.edit.path, 
+                                          'summary_dir/EditingIndex.csv')) %>% 
+  filter(StrandDecidingMethod == 'RefSeqThenMMSites') %>% 
+  select(sample=Sample, signal=A2GEditingIndex, noise=C2TEditingIndex) %>% 
+  separate(sample, c(NA, 'condition', 'rep', NA, NA), '[.]') %>% 
+  ggplot(aes(condition, signal, 
+             color = condition)) +
+  geom_boxplot(size = rel(0.5)) + 
+  geom_point(size = rel(0.5)) +
+  scale_color_manual(values = c(viridis(12, option = 'plasma')[1],
+                 viridis(12, option = 'inferno')[2])) + 
+  geom_signif(comparisons =  list(c('kras','ctrl')),
+              color = 'black',
+              test = 't.test', test.args = list( paired=FALSE),
+              step_increase = 0.075, 
+              size = rel(0.25), inherit.aes = T, textsize = rel(2)) +
+  geom_point(aes(condition, noise), shape = 'diamond', size = rel(1), alpha = 0.5) + 
+  xlab('') + ylab('A-to-I Editing') + 
+  scale_y_continuous(limits = c(0,7), breaks = c(0,1,3,2,4)) +
+  theme(plot.margin=margin(-25,-0.5,-2,2,unit = "mm"),
+        legend.box.margin=margin(0,0,0,-6,unit = "mm")) + 
+  theme(axis.title.y = element_text(vjust = 1))
+
+subset.alu.editing.out
+
+#ggsave('figures/fig.3/subset.sc.editing.3x3.25.pdf', height = 3, width = 3.25, units = 'in')
+```
 
 ## Figure 4:
 
@@ -1312,8 +1390,12 @@ plot.znf.volcano <- function(quant.file) {
 
 znf.aale.de.seq <- plot.znf.volcano(trono.de.krab.znfs) + theme(legend.position = 'null')
 znf.aale.de.seq
+znf.ha1e.de.seq <- plot.znf.volcano(ha1em.trono.de.krab.znfs)
+znf.ha1e.de.seq
 # ggsave(plot = znf.aale.de.seq, '../figures/fig.3/labelled.aale.znf.volcano.2.5x3.5.no.legend.pdf', 
 #        height = 2.5, width = 3.5, units = 'in')
+ggsave(plot = znf.ha1e.de.seq, '../figures/fig.3/labelled.ha1em.znf.volcano.2.5x3.5.no.legend.pdf',
+       height = 2.5, width = 3.5, units = 'in')
 ```
 ### B: 
 #### ATAC histogram:
@@ -1337,5 +1419,139 @@ combined.unique.peaks %>%
 ```
 
 
+## Supplement:
 
+### lncRNA volcanos:
+```{r}
+plot.lnc.volcano <- function(quant.file) {
+  quant.file <- subset(quant.file, gene %in% gen.32.lnc$gene) %>% 
+    # for pval == 0, set to the lowest observed pval non 0 pvalue
+    mutate(padj = ifelse(padj == 0, 
+                         8.402919e-301, 
+                         padj))
+
+
+  ggplot(quant.file, aes(y=-log10(padj),
+                     x=log2fc)) + 
+  theme(axis.line = element_blank()) +
+  geom_point(size = rel(1), alpha = 0.5, color = viridis(1)[1]) + 
+  geom_rug(size = rel(0.5),length = unit(rel(0.1), 'cm'), 
+           alpha = 0.3, color = viridis(12, option = 'plasma')[1]) + 
+  scale_x_continuous(limits = c(-10, 10)) +
+  xlab('log2(Fold Change)') +
+  ylab('-log10(padj)') +
+  geom_hline(yintercept = -log10(0.05), linetype='dotted', alpha = 0.4) +
+  geom_vline(xintercept = 0, linetype='dotted', alpha = 0.4) +
+  geom_hline(yintercept = -log10(0.05), linetype='dotted', alpha = 0.4) +
+  geom_vline(xintercept = c(-1,0,1), linetype='dotted', alpha = 0.4) +
+  scale_color_manual(name='', guide = F, values = c(viridis(1),'grey')) +
+  ggrepel::geom_text_repel(aes(label = ifelse(abs(log2fc) > 2 ,
+                                       as.character(gene), '')),
+                         box.padding = unit('0.5', 'lines'),
+                         segment.color = 'gray',
+                         segment.alpha = 0.2,
+                         color = 'black',
+                         ylim = c(0.5, Inf), size = rel(2.5))
+} 
+
+lnc.aale.de.seq <- plot.lnc.volcano(aale.de.seq)
+lnc.aale.de.seq
+lnc.ha1e.de.seq <- plot.lnc.volcano(ha1em.de.seq)
+lnc.ha1e.de.seq
+ggsave(plot = lnc.aale.de.seq,
+       '../figures/fig.1/updated.lnc.volcano.2.5x3.5.pdf',
+       height = 2.5, width = 3.5, units = 'in')
+ggsave(plot = lnc.ha1e.de.seq,
+       '../figures/fig.1/ha1em.updated.lnc.volcano.2.5x3.5.pdf',
+       height = 2.5, width = 3.5, units = 'in')
+
+```
+### lncRNA venn:
+```{r}
+aale.de.seq %>% subset(gene %in% gen.32.lnc$gene) %>% select(gene) -> lncs.aale.de.seq
+ha1em.de.seq %>% subset(gene %in% gen.32.lnc$gene) %>% select(gene) -> lncs.ha1em.de.seq
+
+lncs.aale.de.seq %>% filter(!gene %in% lncs.ha1em.de.seq$gene)
+lncs.ha1em.de.seq %>% filter(!gene %in% lncs.aale.de.seq$gene)
+
+temp.vd <- venn.diagram(
+  x = list(
+    lncs.aale.de.seq$gene %>% unlist(),
+    lncs.ha1em.de.seq$gene %>% unlist()),
+  category.names = c('',''),
+  filename = NULL,
+  output = TRUE,
+  col = c(alpha(viridis(4)[1],0.3), alpha(viridis(4)[2],0.3)),
+  imagetype = 'pdf',
+  height = unit(1.5, 'in') ,
+  width = unit(1.5, 'in') ,
+  resolution = 300,
+  compression = "lzw",
+  lwd = 1,
+  fill = c(alpha(viridis(4)[1],0.3), alpha(viridis(4)[2],0.3)), 
+  fontfamily = "Helvetica",
+  scaled = T)
+
+library(grDevices)
+
+pdf(file="../figures/fig.1/lnc.venn.2x2.pdf", width = 2, height = 2)
+grid.draw(temp.vd)
+dev.off()
+
+```
+### te venn
+```{r}
+total.sleuth.out %>% filter(approach == 'te-only') %>% select(te) -> te.aale.de.names
+ha1em.sleuth.out %>% filter(approach == 'te-only') %>% select(te) -> te.ha1em.de.names
+
+te.aale.de.names %>% filter(!te %in% te.ha1em.de.names$te) %>% unique()
+te.ha1em.de.names %>% filter(!te %in% te.aale.de.names$te) %>% unique()
+
+temp.vd <- venn.diagram(
+  x = list(
+    te.aale.de.names$te %>% unlist(),
+    te.ha1em.de.names$te %>% unlist()),
+  category.names = c('',''),
+  filename = NULL,
+  output = TRUE,
+  col = c(alpha(viridis(4)[1],0.3), alpha(viridis(4)[2],0.3)),
+  imagetype = 'pdf',
+  height = unit(2, 'in') ,
+  width = unit(2, 'in') ,
+  resolution = 300,
+  compression = "lzw",
+  lwd = 1,
+  fill = c(alpha(viridis(4)[1],0.3), alpha(viridis(4)[2],0.3)), 
+  fontfamily = "Helvetica",
+  scaled = T)
+
+library(grDevices)
+
+pdf(file="../figures/fig.1/te.venn.2x2.pdf", width = 2, height = 2)
+grid.draw(temp.vd)
+dev.off()
+
+```
+### homer tables
+```{r}
+getwd()
+library(gt)
+#kras.unique.peaks.motifs.table <- 
+read_tsv(paste0(atac.dir, 'homer.annotations/kras.unique.peaks.motif/knownResults.txt')) %>% 
+  select('Motif Name', 'Consensus', 'Log P-value', 'q-value (Benjamini)', '% of Target Sequences with Motif', '% of Background Sequences with Motif') %>% 
+  top_n(25, wt = -`Log P-value`) %>% 
+  gt() %>% 
+  tab_header('Motifs unique to KRAS ATAC library') %>% 
+  tab_options(table.font.size = 8) %>% 
+  print()
+
+read_tsv(paste0(atac.dir, 'homer.annotations/total.znf.way.dn.peaks.motif/knownResults.txt')) %>% 
+  select('Motif Name', 'Consensus', 'Log P-value', 'q-value (Benjamini)', '% of Target Sequences with Motif', '% of Background Sequences with Motif') %>% 
+  top_n(25, wt = -`Log P-value`) %>% 
+  gt() %>% 
+  tab_header('Motifs enriched in downregulated (log2FC <= -1) ZNF loci') %>% 
+  tab_options(table.font.size = 8) %>% 
+  print()
+
+```
 
