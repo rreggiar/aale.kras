@@ -47,7 +47,7 @@ sample.info.df <-
 print(sample.info.df)
 
 files <- 
-    file.path(paths, sample.info.df$sample, 'te.locus.for.sleuth.out', 'quant.sf')
+    file.path(paths, sample.info.df$sample, 'gencode.salmon.out', 'quant.sf')
 
 
 names(files) <- sample.info.df$sample
@@ -58,7 +58,7 @@ names(tx2gene) <- c("Name", "GeneID")
 txi <- tximport(files, 
                 type= "salmon" , 
                 tx2gene = tx2gene,
-                txOut = T)
+                txOut = F)
 
 print(head(txi$counts))
 
@@ -68,8 +68,8 @@ dds <- DESeqDataSetFromTximport(txi, colData = sample.info.df,
 dds <- estimateSizeFactors(dds)
 
 write.csv(as.data.frame(counts(dds, normalized=T)),
-          '/public/groups/kimlab/aale.kras/data/bulk.rna.seq/aale/output/tx.exo.gencode.kras.v.ctrl.de-seq.counts.csv')
-'''
+          '/public/groups/kimlab/aale.kras/data/bulk.rna.seq/exo/output/exo.gencode.kras.v.ctrl.de-seq.counts.csv')
+
 keep <- rowSums(counts(dds)) >= 10
 dds.txi <- dds[keep, ]
 dds.txi <- DESeq(dds.txi)
@@ -89,6 +89,5 @@ resLFC <- lfcShrink(dds.txi,
                 type = 'apeglm')
 
 write.csv(as.data.frame(resLFC), 
-          '/public/groups/kimlab/aale.kras/data/bulk.rna.seq/aale/output/exo.gencode.kras.v.ctrl.de-seq.csv')
+          '/public/groups/kimlab/aale.kras/data/bulk.rna.seq/exo/output/exo.gencode.kras.v.ctrl.de-seq.csv')
 
-'''
