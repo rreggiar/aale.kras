@@ -59,7 +59,7 @@ for SAMPLE in $PWD/* ; do
 			--seqBias \
 			--output $SAMPLE/$OUTDIR/
     fi
-
+    '''
     echo "SALMON COMPLETE, CHECKING STAR"
     trim1=$SAMPLE/output_forward_paired.fq.gz
     trim2=$SAMPLE/output_reverse_paired.fq.gz
@@ -75,7 +75,6 @@ for SAMPLE in $PWD/* ; do
         --outFilterMatchNminOverLread 0.95 \
         --outSAMtype BAM SortedByCoordinate
     fi   
-   ''' 
     echo "SALMON COMPLETE, CHECKING STAR"
     trim1=$SAMPLE/output_forward_paired.fq.gz
     trim2=$SAMPLE/output_reverse_paired.fq.gz
