@@ -2,12 +2,12 @@
 
 INPUTDIR='/public/groups/kimlab/aale.kras/data/bulk.rna.seq/exo/input'
 #OUTDIR=quantFiles
-TXINDEX='/public/groups/kimlab/indexes/gencode.32.v.1.index/'
-#TXINDEX='/public/groups/kimlab/indexes/te.locus.v.1.index/'
+#TXINDEX='/public/groups/kimlab/indexes/gencode.32.v.1.index/'
+TXINDEX='/public/groups/kimlab/indexes/te.locus.v.1.index/'
 HG38='/public/groups/kimlab/genomes.annotations/GCA_000001405.15_GRCh38_no_alt_analysis_set.fna'
 GENOMEDIR='/public/groups/kimlab/genomes.annotations/HG.38.w.te.cons/'
 ADAPTERS='/public/groups/kimlab/genomes.annotations/adapters'
-OUTDIR=gencode.salmon.out
+OUTDIR=te.locus.out.for.sleuth
 
 STAR --version
 salmon -v
@@ -63,7 +63,7 @@ for SAMPLE in $PWD/* ; do
     echo "SALMON COMPLETE, CHECKING STAR"
     trim1=$SAMPLE/output_forward_paired.fq.gz
     trim2=$SAMPLE/output_reverse_paired.fq.gz
-    if [ ! -f */Aligned.out.sam ]; then
+    if [ ! -f "$SAMPLE/rna.edit.star.out/Aligned.out.sam" ]; then
         echo "RUNNING 1 PASS STAR for editing ON" $SAMPLE
         firstRunDir=$SAMPLE/rna.edit.star.out/
         mkdir $firstRunDir
