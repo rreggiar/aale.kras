@@ -16,7 +16,7 @@ trimmomatic -version
 cd $INPUTDIR
 #mkdir $OUTDIR
 
-for SAMPLE in $PWD/aale.* ; do
+for SAMPLE in $PWD/* ; do
     echo $SAMPLE
 
 	cd $SAMPLE
