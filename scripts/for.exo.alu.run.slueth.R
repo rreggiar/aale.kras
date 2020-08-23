@@ -7,21 +7,21 @@ library(rhdf5)
 #### must be run in cmd line as 'echo 'path' 'out path' 'num samples' | Rscript sleuthRun.R
 paths <- scan(file=file("stdin", 'r'), what='character', n=1)
 path <- paths[1]
-out <- '/public/groups/kimlab/aale.kras/data/bulk.rna.seq/aale/output'
+out <- '/public/groups/kimlab/aale.kras/data/bulk.rna.seq/exo/output'
 sample_num <- 6
 
-s2c <- data.frame('sample' = c('aale.ctrl.1',
-	'aale.ctrl.2',
-	'aale.ctrl.3',
-	'aale.kras.1', 
-	'aale.kras.2', 
-	'aale.kras.3'),
+s2c <- data.frame('sample' = c('ctrl.1',
+	'ctrl.2',
+	'ctrl.3',
+	'kras.1', 
+	'kras.2', 
+	'kras.3'),
               'condition' = c('ctrl', 'ctrl', 'ctrl',
                               'kras', 'kras', 'kras'))
                         
 #dir.create(out)
 files <- file.path(path, s2c$sample, 
-                   'te.locus.for.sleuth.out')
+                   'te.locus.out.for.sleuth')
 #print(files)
 #sfdirs <- file.path(path, files)[1:sample_num]
 prepare_fish_for_sleuth(files)
