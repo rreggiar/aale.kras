@@ -2,12 +2,12 @@
 
 INPUTDIR='/public/groups/kimlab/aale.kras/data/bulk.rna.seq/exo/input'
 #OUTDIR=quantFiles
-#TXINDEX='/public/groups/kimlab/indexes/gencode.32.v.1.index/'
-TXINDEX='/public/groups/kimlab/indexes/te.locus.v.1.index/'
+TXINDEX='/public/groups/kimlab/indexes/gencode.32.v.1.index/'
+#TXINDEX='/public/groups/kimlab/indexes/te.locus.v.1.index/'
 HG38='/public/groups/kimlab/genomes.annotations/GCA_000001405.15_GRCh38_no_alt_analysis_set.fna'
 GENOMEDIR='/public/groups/kimlab/genomes.annotations/HG.38.w.te.cons/'
 ADAPTERS='/public/groups/kimlab/genomes.annotations/adapters'
-OUTDIR=te.locus.out.for.sleuth
+OUTDIR=gencode.salmon.out
 
 STAR --version
 salmon -v
@@ -53,7 +53,6 @@ for SAMPLE in $PWD/* ; do
 			-1 ${trim1}\
 			-2 ${trim2}\
 			-p 64\
-            --numBootstraps 10 \
 			--validateMappings \
 			--gcBias \
 			--seqBias \
