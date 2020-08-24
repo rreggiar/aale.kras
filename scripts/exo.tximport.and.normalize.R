@@ -27,9 +27,9 @@ sample.info <- data.frame('sample' = character(),
 
 
 sample.info.list <- lapply(files, function(x){
-            x.split <- str_split(x, '[.]', n = 2)[[1]]
+            x.split <- str_split(x, '[.]', n = 3)[[1]]
             condition <- x.split[1]
-            rep <- x.split[2]
+            rep <- x.split[3]
             temp.df <- data.frame('sample' = x,
                                   'condition' = condition,
                                   'rep' = rep)
@@ -68,7 +68,7 @@ dds <- DESeqDataSetFromTximport(txi, colData = sample.info.df,
 dds <- estimateSizeFactors(dds)
 
 write.csv(as.data.frame(counts(dds, normalized=T)),
-          '/public/groups/kimlab/aale.kras/data/bulk.rna.seq/exo/output/exo.gencode.kras.v.ctrl.de-seq.counts.csv')
+          '/public/groups/kimlab/aale.kras/data/bulk.rna.seq/exo.ctrl.compare/output/exo.gencode.kras.v.ctrl.de-seq.counts.csv')
 
 keep <- rowSums(counts(dds)) >= 10
 dds.txi <- dds[keep, ]
@@ -79,15 +79,15 @@ dds.txi <- DESeq(dds.txi)
 
 resultsNames(dds.txi)
 
-res <- results(dds.txi, name = 'condition_kras_vs_ctrl')
+res <- results(dds.txi, name = 'condition_intra_vs_exo')
 #res <- results(dds.txi, name = 'group')
 #res <- results(dds.txi, name = 'diabetes')
 resLFC <- lfcShrink(dds.txi, 
-                coef = 'condition_kras_vs_ctrl', 
+                coef = 'condition_intra_vs_exo', 
                 #coef = 'group',
                 #coef = 'diabetes',
                 type = 'apeglm')
 
 write.csv(as.data.frame(resLFC), 
-          '/public/groups/kimlab/aale.kras/data/bulk.rna.seq/exo/output/exo.gencode.kras.v.ctrl.de-seq.csv')
+          '/public/groups/kimlab/aale.kras/data/bulk.rna.seq/exo.ctrl.compare/output/exo.gencode.kras.v.ctrl.de-seq.csv')
 
