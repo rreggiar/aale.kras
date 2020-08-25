@@ -68,7 +68,7 @@ dds <- DESeqDataSetFromTximport(txi, colData = sample.info.df,
 dds <- estimateSizeFactors(dds)
 
 write.csv(as.data.frame(counts(dds, normalized=T)),
-          '/public/groups/kimlab/aale.kras/data/bulk.rna.seq/aale/output/gencode.tx.aale.kras.v.ctrl.de-seq.counts.csv')
+          '/public/groups/kimlab/aale.kras/data/bulk.rna.seq/exo/output/exo.gencode.tx.aale.kras.v.ctrl.de-seq.counts.csv')
 quit()
 keep <- rowSums(counts(dds)) >= 10
 dds.txi <- dds[keep, ]
