@@ -47,7 +47,7 @@ sample.info.df <-
 print(sample.info.df)
 
 files <- 
-    file.path(paths, sample.info.df$sample, 'gencode.salmon.out', 'quant.sf')
+    file.path(paths, sample.info.df$sample, 'te.locus.out.for.sleuth', 'quant.sf')
 
 
 names(files) <- sample.info.df$sample
