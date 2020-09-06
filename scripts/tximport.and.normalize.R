@@ -58,7 +58,7 @@ names(tx2gene) <- c("Name", "GeneID")
 txi <- tximport(files, 
                 type="salmon", 
                 tx2gene = tx2gene,
-                txOut = F)
+                txOut = T)
 
 print(head(txi$counts))
 
