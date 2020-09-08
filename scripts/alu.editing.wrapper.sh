@@ -6,7 +6,7 @@ input.counts.file=$1
 output.tmp.counts=$2
 output.locus.bed=$3
 
-echo "$input.counts.file" "$output.tmp.counts" | Rscript alu.loci.for.editing.Rscript
+echo "$input.counts.file" "$output.tmp.counts" | Rscript alu.loci.for.editing.R
 
 until [ -f "$output.tmp.counts" ]
 
