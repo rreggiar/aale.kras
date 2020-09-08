@@ -10,6 +10,6 @@ output.file <- file.path(paths.in[2])
 aale.locus.count <-
 	read_csv(input.file) %>%
 	filter(grepl('Alu', X1)) %>%
-	filter_at(contains('.'), any_vars(. >= 10))
+	filter_at(vars(contains('.')), any_vars(. >= 10))
 
 write_csv(aale.locus.count, output.file)
