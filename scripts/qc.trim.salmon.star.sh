@@ -1,6 +1,6 @@
 #!/bin/bash
 
-INPUTDIR='/public/home/rreggiar/projects/aale.kras/data/bulk.rna.seq/aale/input'
+INPUTDIR='/public/groups/kimlab/aale.kras/data/bulk.rna.seq/exotic/input'
 #OUTDIR=quantFiles
 TXINDEX='/public/groups/kimlab/indexes/gencode.32.v.1.index/'
 #TXINDEX='/public/groups/kimlab/indexes/te.locus.v.1.index/'
