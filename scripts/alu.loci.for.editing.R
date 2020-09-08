@@ -2,7 +2,7 @@
 
 library(tidyverse)
 
-writeLines(readLines(file("stdin")))
+input.file <- file.path(readLines(file("stdin")))
 
 quit()
 
