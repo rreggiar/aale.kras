@@ -4,6 +4,8 @@ library(tidyverse)
 
 input.file <- file.path(readLines(file("stdin")))
 
+print(input.file)
+
 quit()
 
 aale.locus.count <-
