@@ -17,6 +17,6 @@ done
 
 echo "creating bed file"
 
-cut -d"'" -f1 "$output_tmp_counts" | cut -d'=' -f2 | sed 's/:/\t/g ; s/-/\t/g ; s/_5//g' | sort -k1,1 -2,2n > "$output_locus_bed"
+cut -d"'" -f1 "$output_tmp_counts" | cut -d'=' -f2 | sed 's/:/\t/g ; s/-/\t/g ; s/_5//g' | sort -k1,1 -k2,2n > "$output_locus_bed"
 
 rm "$output_tmp_counts"
