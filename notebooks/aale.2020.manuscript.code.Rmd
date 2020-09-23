@@ -127,6 +127,11 @@ chr.19.bins <- data.frame(chr = 'chr19',
 
 trono.znf.targets <- read_csv('../data/other/wetlab/all.znf.te.score.csv') %>% 
   gather(target, score, -X1)
+
+te.families.clades <- 
+  read_csv('../data/other/reference/te.family.clade.csv',
+           col_names = c('gene', 'family', 'clade')) %>% 
+  distinct()
 ```
 ## gene sets of interest
 ```{r echo=FALSE}
@@ -250,8 +255,8 @@ ha1em.trono.de.krab.znfs <- read_csv('../data/other/wetlab/all.human.znf.trono.d
   merge(ha1em.de.seq, by = 'gene')
 
 aale.exo.locus.count <- 
-  read.csv('../data/bulk.rna.seq/aale/output/tx.exo.gencode.kras.v.ctrl.de-seq.counts.csv') %>% 
-  filter(grepl('Alu', X)) %>% 
+  read_csv('../data/bulk.rna.seq/aale/output/tx.exo.gencode.kras.v.ctrl.de-seq.counts.csv') %>% 
+  filter(grepl('Alu', X1)) %>% 
   filter_at(vars(contains('.')), any_vars(. >= 10))
 
 # write_csv(x = aale.exo.locus.count,
@@ -1716,4 +1721,73 @@ exo.gencode.te.locus.aale.norm.counts %>%
 #        height = 2.5, width = 3.5, units = 'in')
 
 ```
+### exoTIC comparisons
+```{r}
+exotic.gencode.norm.counts <-
+  read_csv('../data/bulk.rna.seq/exotic/output/exo.gencode.aale.kras.v.ctrl.de-seq.counts.csv')
+
+exotic.tx.gencode.norm.counts <-
+  read_csv('../data/bulk.rna.seq/exotic/output/exo.tx.gencode.aale.kras.v.ctrl.de-seq.counts.csv') %>% 
+  rename(X1 = 'tx') %>% 
+  separate(tx, sep = '\\|', into = c('enst','ensg',NA,NA,'tx','gene','len','biotype'))
+
+```
+#### exoTIC biotype dist
+```{r}
+exotic.tx.gencode.norm.counts %>% 
+  gather(sample, count, -enst:-biotype) %>% 
+  filter(grepl('exotic', sample)) %>% 
+  filter(biotype != 'Mt_rRNA') %>% 
+  group_by(biotype, sample) %>% 
+  summarise(count = sum(count)) %>% 
+  group_by(sample) %>% 
+  mutate(freq = count / sum(count)) %>% 
+  mutate(biotype = ifelse(biotype %in% c('lncRNA', 'protein_coding'),
+                          biotype, 'other')) %>% 
+  #        condition = ifelse(grepl('ctrl', sample), control, treatment)) %>% 
+  # mutate(biotype = ifelse(biotype %in% te.families.clades$family, 'TE', biotype)) %>% 
+  ggplot(aes(sample, freq, fill = biotype, color = biotype)) + 
+    geom_bar(stat = 'identity') +
+    # geom_boxplot(outlier.size = NULL,position = position_dodge(width = 1)) + 
+    #geom_sina(position = position_dodge(width = 1)) +
+    scale_fill_viridis_d(direction = -1) +
+    scale_color_viridis_d(direction = -1) + 
+    scale_x_discrete(expand = c(0, 0.5)) +
+    geom_hline(yintercept = seq(0,1,0.25), color = 'white') + 
+    xlab('') + ylab('% of total counts') + 
+    theme(axis.text.x = element_text(angle = 40, hjust = 1))
+
+# ggsave('../figures/fig.3/supplement.exotic.biotypes.2.5x3.5.pdf',
+#        height = 2.5, width = 3.5, units = 'in')
+```
+#### exoTIC Alu editing
+```{r}
+rna.edit.path <- '../data/bulk.rna.seq/exotic/output/exotic.alu.edit.out/'
+
+subset.alu.editing.out <- read_csv(paste0(rna.edit.path, 
+                                          'summary_dir/EditingIndex.csv')) %>% 
+  filter(StrandDecidingMethod == 'RefSeqThenMMSites') %>% 
+  select(sample=Sample, signal=A2GEditingIndex, noise=C2TEditingIndex) %>% 
+  separate(sample, c(NA, 'condition', 'rep', NA), '[.]') %>% 
+  ggplot(aes(condition, signal, color = condition)) +
+  geom_boxplot(size = rel(0.5)) + 
+  geom_point(size = rel(0.5)) +
+  geom_signif(comparisons =  list(c('ctrl','kras')),
+              color = 'black',
+              test = 't.test', test.args = list( paired=FALSE),
+              step_increase = 0.075, 
+              size = rel(0.25), inherit.aes = T, textsize = rel(2)) +
+  geom_point(aes(condition, noise, color = condition), 
+             shape = 'diamond', 
+             size = rel(1), alpha = 0.5) + 
+  xlab('') + ylab('A-to-I Editing') + 
+  scale_y_continuous(limits = c(0,0.75)) + 
+  scale_color_manual('condition', values = c(viridis(3)[1], viridis(3)[2]), guide = F)
+
+subset.alu.editing.out
+
+# ggsave('../figures/fig.3/subset.exotic.editing.2.5x3.5.pdf',
+#        height = 2.5, width = 3.5, units = 'in')
+```
+
 
