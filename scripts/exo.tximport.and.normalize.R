@@ -41,8 +41,8 @@ sample.info.list <- lapply(files, function(x){
 print(sample.info.list)
 
 sample.info.df <- 
-    as.data.frame(bind_rows(sample.info.list)) #%>%
-    #filter(grepl('patient', sample))
+    as.data.frame(bind_rows(sample.info.list)) %>%
+    filter(grepl('kras', sample))
 
 print(sample.info.df)
 
@@ -58,7 +58,7 @@ names(tx2gene) <- c("Name", "GeneID")
 txi <- tximport(files, 
                 type= "salmon" , 
                 tx2gene = tx2gene,
-                txOut = T)
+                txOut = F)
 
 print(head(txi$counts))
 
@@ -67,9 +67,9 @@ dds <- DESeqDataSetFromTximport(txi, colData = sample.info.df,
 
 dds <- estimateSizeFactors(dds)
 
-write.csv(as.data.frame(counts(dds, normalized=T)),
-          '/public/groups/kimlab/aale.kras/data/bulk.rna.seq/exo.ctrl.compare/output/exo.gencode.tx.aale.kras.v.ctrl.de-seq.counts.csv')
-quit()
+#write.csv(as.data.frame(counts(dds, normalized=T)),
+#          '/public/groups/kimlab/aale.kras/data/bulk.rna.seq/exo.ctrl.compare/output/exo.gencode.tx.aale.kras.v.ctrl.de-seq.counts.csv')
+#quit()
 keep <- rowSums(counts(dds)) >= 10
 dds.txi <- dds[keep, ]
 dds.txi <- DESeq(dds.txi)
@@ -89,5 +89,5 @@ resLFC <- lfcShrink(dds.txi,
                 type = 'apeglm')
 
 write.csv(as.data.frame(resLFC), 
-          '/public/groups/kimlab/aale.kras/data/bulk.rna.seq/exo.ctrl.compare/output/exo.gencode.kras.v.ctrl.de-seq.csv')
+          '/public/groups/kimlab/aale.kras/data/bulk.rna.seq/exo.ctrl.compare/output/exo.gencode.intra.v.exo.de-seq.csv')
 
