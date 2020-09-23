@@ -18,7 +18,7 @@ paths.in <- scan(file=file("stdin", "r"), what="character")
 paths <- paths.in[1]
 tx2genepath <- '/public/groups/kimlab/genomes.annotations/gencode.32/gen.32.ucsc.rmsk.tx.2.gene.csv'
 files <- dir(file.path(paths))
-print(files)
+#print(files)
 names(files) <- files
 
 sample.info <- data.frame('sample' = character(),
@@ -38,7 +38,7 @@ sample.info.list <- lapply(files, function(x){
             return(temp.df)
 })
 
-print(sample.info.list)
+#print(sample.info.list)
 
 sample.info.df <- 
     as.data.frame(bind_rows(sample.info.list)) %>%
