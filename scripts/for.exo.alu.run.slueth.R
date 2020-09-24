@@ -7,17 +7,17 @@ library(rhdf5)
 #### must be run in cmd line as 'echo 'path' 'out path' 'num samples' | Rscript sleuthRun.R
 paths <- scan(file=file("stdin", 'r'), what='character', n=1)
 path <- paths[1]
-out <- '/public/groups/kimlab/aale.kras/data/bulk.rna.seq/exo/output'
+out <- '/public/groups/kimlab/aale.kras/data/bulk.rna.seq/exo.kras.te.compare/'
 sample_num <- 6
 
-s2c <- data.frame('sample' = c('ctrl.1',
-	'ctrl.2',
-	'ctrl.3',
-	'kras.1', 
-	'kras.2', 
-	'kras.3'),
-              'condition' = c('ctrl', 'ctrl', 'ctrl',
-                              'kras', 'kras', 'kras'))
+s2c <- data.frame('sample' = c('exo.kras.1',
+	'exo.kras.2',
+	'exo.kras.3',
+	'intra.kras.1', 
+	'intra.kras.2', 
+	'intra.kras.3'),
+              'condition' = c('exo', 'exo', 'exo',
+                              'intra', 'intra', 'intra'))
                         
 #dir.create(out)
 files <- file.path(path, s2c$sample, 
