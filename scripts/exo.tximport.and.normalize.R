@@ -47,7 +47,7 @@ sample.info.df <-
 print(sample.info.df)
 
 files <- 
-    file.path(paths, sample.info.df$sample, 'gencode.salmon.out', 'quant.sf')
+    file.path(paths, sample.info.df$sample, 'te.locus.out.for.sleuth', 'quant.sf')
 
 
 names(files) <- sample.info.df$sample
@@ -58,7 +58,7 @@ names(tx2gene) <- c("Name", "GeneID")
 txi <- tximport(files, 
                 type= "salmon" , 
                 tx2gene = tx2gene,
-                txOut = F)
+                txOut = T)
 
 print(head(txi$counts))
 
@@ -67,9 +67,9 @@ dds <- DESeqDataSetFromTximport(txi, colData = sample.info.df,
 
 dds <- estimateSizeFactors(dds)
 
-#write.csv(as.data.frame(counts(dds, normalized=T)),
-#          '/public/groups/kimlab/aale.kras/data/bulk.rna.seq/exo.ctrl.compare/output/exo.gencode.tx.aale.kras.v.ctrl.de-seq.counts.csv')
-#quit()
+write.csv(as.data.frame(counts(dds, normalized=T)),
+          '/public/groups/kimlab/aale.kras/data/bulk.rna.seq/exo.kras.te.compare/output/exo.te.aale.kras.v.ctrl.de-seq.counts.csv')
+quit()
 keep <- rowSums(counts(dds)) >= 10
 dds.txi <- dds[keep, ]
 dds.txi <- DESeq(dds.txi)
