@@ -1,6 +1,6 @@
 #!/bin/bash
 
-INPUTDIR='/public/groups/kimlab/aale.kras/data/bulk.rna.seq/exotic/input'
+INPUTDIR='/public/groups/kimlab/aale.kras/data/bulk.rna.seq/exo/input'
 #OUTDIR=quantFiles
 #TXINDEX='/public/groups/kimlab/indexes/gencode.32.v.1.index/'
 TXINDEX='/public/groups/kimlab/indexes/te.locus.v.1.index/'
@@ -57,6 +57,7 @@ for SAMPLE in $PWD/* ; do
 			--validateMappings \
 			--gcBias \
 			--seqBias \
+            --bootsraps 10 \
 			--output $SAMPLE/$OUTDIR/
     fi
     '''
