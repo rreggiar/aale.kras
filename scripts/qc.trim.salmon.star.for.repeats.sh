@@ -1,6 +1,7 @@
 #!/bin/bash
 
-INPUTDIR='/public/groups/kimlab/aale.kras/data/bulk.rna.seq/exo/input'
+#INPUTDIR='/public/groups/kimlab/aale.kras/data/bulk.rna.seq/exo/input'
+INPUTDIR=$1
 #OUTDIR=quantFiles
 #TXINDEX='/public/groups/kimlab/indexes/gencode.32.v.1.index/'
 TXINDEX='/public/groups/kimlab/indexes/te.locus.v.1.index/'
@@ -53,12 +54,12 @@ for SAMPLE in $PWD/* ; do
 			--libType A \
 			-1 ${trim1}\
 			-2 ${trim2}\
-			-p 64\
+			-p 4 \
 			--validateMappings \
 			--gcBias \
 			--seqBias \
             --numBootstraps 10 \
-			--output $SAMPLE/$OUTDIR/
+			--output $SAMPLE/$OUTDIR/ &
     fi
     '''
     echo "SALMON COMPLETE, CHECKING STAR"
@@ -86,7 +87,7 @@ for SAMPLE in $PWD/* ; do
         cd $firstRunDir
         #secondRunDir=$SAMPLE/star.out/pass.2/
         #mkdir $secondRunDir
-        STAR --genomeDir $GENOMEDIR --readFilesIn <(gunzip -c $trim1) <(gunzip -c $trim2) --outFilterMatchNminOverLread 0.95
+        STAR --genomeDir $GENOMEDIR --rGeadFilesIn <(gunzip -c $trim1) <(gunzip -c $trim2) --outFilterMatchNminOverLread 0.95
     fi
 done
 cd $INPUTDIR
@@ -97,4 +98,5 @@ for SAMPLE in $PWD/*; do
 	STAR --genomeDir $GENOMEDIR --readFilesIn <(gunzip -c $trim1) <(gunzip -c $trim2) --sjdbFileChrStartEnd $INPUTDIR/*/star.out/SJ.out.tab
     '''
 done
+wait
 
