@@ -57,7 +57,7 @@ for SAMPLE in $PWD/* ; do
 			--validateMappings \
 			--gcBias \
 			--seqBias \
-            --bootsraps 10 \
+            --numBootstraps 10 \
 			--output $SAMPLE/$OUTDIR/
     fi
     '''
