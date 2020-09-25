@@ -63,7 +63,7 @@ summarize(avg = mean(TPM)) %>%
 # take the condition entries and make them columns with the values set to TPM
 spread(condition, avg)
 # calculate lof2(Fold Change) in a new column
-quant.data$log2fc <- log2((quant.data$kras + 1.00)/(quant.data$ctrl + 1.00))
+quant.data$log2fc <- log2((quant.data$exo + 1.00)/(quant.data$intra + 1.00))
 # merge the sleuth output with the new quant data by the tx names
 quant.data.lrt <- merge(quant.data, sleuth.out, by.x = 'Name', by.y = 'target_id')
 # preview output file
