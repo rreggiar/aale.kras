@@ -22,8 +22,10 @@ paths.in <- scan(file=file("stdin", "r"), what="character", n=2)
 paths <- paths.in[1]
 # set second stdin argument to sleuth output file
 sleuth.out <- read.csv(paths.in[2])
-sample.names <- tibble(sample = c('ctrl.1', 'ctrl.2', 'ctrl.3',
-                                  'kras.1', 'kras.2', 'kras.3'))
+#sample.names <- tibble(sample = c('ctrl.1', 'ctrl.2', 'ctrl.3',
+#                                  'kras.1', 'kras.2', 'kras.3'))
+sample.names <- tibble(sample = c('intra.kras.1','intra.kras.2','intra.kras.3',
+                                  'exo.kras.1', 'exo.kras.2', 'exo.kras.3'))
 # extract subdir's from input path
 files <- file.path(paths, sample.names$sample, 'te.locus.out.for.sleuth')
 # print subdir names
