@@ -42,8 +42,8 @@ files <- lapply(files, function(x){
                       x <- read.delim(full.path, sep = '\t')
                       # set new rep column to name of subdir (condition)
                       print(full.path)
-                      x$rep <- strsplit(full.path,'/')[[1]][10]
-                      print(strsplit(full.path,'/')[[1]][10])
+                      x$rep <- strsplit(full.path,'/')[[1]][11]
+                      print(strsplit(full.path,'/')[[1]][11])
                       # seperate rep column by the file name delimeter into
                       # condtion 'ctrl/kras' and rep '1,2,3'
                       x <- x %>% separate(rep, c('condition', 'rep'))
