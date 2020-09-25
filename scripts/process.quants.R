@@ -46,7 +46,7 @@ files <- lapply(files, function(x){
                       print(strsplit(full.path,'/')[[1]][11])
                       # seperate rep column by the file name delimeter into
                       # condtion 'ctrl/kras' and rep '1,2,3'
-                      x <- x %>% separate(rep, c('condition', 'rep'))
+                      x <- x %>% separate(rep, sep = '[.]', c('condition', NA, 'rep'))
                       # return the new dataframe
                       return(x)
 }) # end [iteration]
