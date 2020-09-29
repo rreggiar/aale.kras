@@ -267,6 +267,15 @@ exo.aale.de.seq <-
   filter(padj < 0.01)
 names(exo.aale.de.seq) <- c('gene', 'baseMean', 'log2fc', 'lfcse', 'pval', 'padj')
 
+exo.aale.norm.counts <- 
+  read_csv('../data/bulk.rna.seq/aale/output/exo.gencode.normalized.counts.csv')
+
+exo.vs.intra.kras.de.seq <- 
+  read_csv('../data/bulk.rna.seq/exo.ctrl.compare/output/exo.gencode.intra.v.exo.de-seq.csv',
+           col_names = c('gene', 'baseMean', 'log2fc', 'lfcse', 'pval', 'padj'),
+           skip=1) %>% 
+  filter(padj < 0.01, abs(log2fc) >= 1) 
+
 exo.gencode.te.locus.aale.norm.counts <- 
   read.csv('../data/bulk.rna.seq/exo/output/exo.gencode.tx.aale.kras.v.ctrl.de-seq.counts.csv') %>% 
   rename(X = 'tx') %>% 
@@ -299,6 +308,30 @@ aale.sleuth.out <- read_csv('../data/bulk.rna.seq/aale/output/quant.data.log2fc.
 aale.exo.sleuth.out <- read_csv('../data/bulk.rna.seq/exo/output/quant.data.log2fc.csv') %>% 
   #filter(qval <= 0.05) %>% 
   separate(Name, sep = '=', into = c('te', 'position', NA, NA, 'strand', NA)) %>% 
+  separate(position, sep = '_', into = c('pos', NA)) %>% 
+  separate(pos, sep = ':', into = c('chr', 'startend')) %>% 
+  separate(startend, sep = '-', into = c('start', 'stop')) %>% 
+  separate(strand, sep = '_', into = c('strand', NA)) %>% 
+  separate(te, sep = '_', into = c(NA, NA, 'te', NA)) %>% 
+  merge(te.clades.merge, by = 'te') %>% 
+  mutate(approach = 'te-only')
+
+aale.exo.vs.intra.sleuth.out.actual <- read_csv('../data/bulk.rna.seq/exo.kras.te.compare/output/quant.data.log2fc.csv') %>% 
+  #filter(qval <= 0.05) %>% 
+  separate(Name, sep = '=', into = c('te', 'position', NA, NA, 'strand', NA)) %>% 
+  separate(position, sep = '_', into = c('pos', NA)) %>% 
+  separate(pos, sep = ':', into = c('chr', 'startend')) %>% 
+  separate(startend, sep = '-', into = c('start', 'stop')) %>% 
+  separate(strand, sep = '_', into = c('strand', NA)) %>% 
+  separate(te, sep = '_', into = c(NA, NA, 'te', NA)) %>% 
+  merge(te.clades.merge, by = 'te') %>% 
+  mutate(approach = 'te-only')
+
+# write_csv(aale.exo.vs.intra.sleuth.out.actual, '../data/bulk.rna.seq/exo.kras.te.compare/output/aale.exo.vs.intra.te.de.csv')
+
+
+aale.exo.vs.intra.sleuth.out <- read_csv('../data/bulk.rna.seq/exo.kras.te.compare/output/exo.te.aale.kras.v.ctrl.de-seq.counts.csv') %>% 
+  separate(X1, sep = '=', into = c('te', 'position', NA, NA, 'strand', NA)) %>% 
   separate(position, sep = '_', into = c('pos', NA)) %>% 
   separate(pos, sep = ':', into = c('chr', 'startend')) %>% 
   separate(startend, sep = '-', into = c('start', 'stop')) %>% 
@@ -748,11 +781,11 @@ plot.isg.volcano <- function(quant.file) {
   quant.file <- subset(quant.file, gene %in% c(kras.isg.signature,
                                                liu.isg.signature,
                                                msig.df.h.ifna,
-                                               msig.df.h.ifng)) %>% 
-    # for pval == 0, set to the lowest observed pval non 0 pvalue
-    mutate(padj = ifelse(padj == 0, 
-                         8.402919e-301, 
-                         padj))
+                                               msig.df.h.ifng)) %>%
+  # for pval == 0, set to the lowest observed pval non 0 pvalue
+  mutate(padj = ifelse(padj == 0,
+                       8.402919e-301,
+                       padj))
 
 
   ggplot(quant.file, aes(y=-log10(padj),
@@ -761,7 +794,7 @@ plot.isg.volcano <- function(quant.file) {
   geom_point(size = rel(1), alpha = 0.5, color = viridis(1)[1]) + 
   geom_rug(size = rel(0.5),length = unit(rel(0.1), 'cm'), 
            alpha = 0.3, color = viridis(12, option = 'plasma')[1]) + 
-  scale_x_continuous(limits = c(-6, 6)) +
+  #scale_x_continuous(limits = c(-6, 6)) +
   xlab('log2(Fold Change)') +
   ylab('-log10(padj)') +
   geom_hline(yintercept = -log10(0.05), linetype='dotted', alpha = 0.4) +
@@ -780,6 +813,7 @@ plot.isg.volcano <- function(quant.file) {
 
 isg.aale.de.seq <- plot.isg.volcano(aale.de.seq)
 isg.aale.de.seq
+
 # isg.ha1e.de.seq <- plot.isg.volcano(ha1em.de.seq)
 # isg.ha1e.de.seq
 # ggsave(plot = isg.aale.de.seq, 
@@ -1245,15 +1279,15 @@ plot.te.volcano <- function(quant.file) {
   geom_vline(xintercept = 0, linetype='dotted', alpha = 0.4) +
   geom_hline(yintercept = -log10(0.05), linetype='dotted', alpha = 0.4) +
   geom_vline(xintercept = c(-1,0,1), linetype='dotted', alpha = 0.4) +
-  scale_color_viridis_d(name = 'clade') + 
+  scale_color_viridis_d(name = 'clade') #+ 
   #facet_wrap(~approach, ncol = 1) +
-  ggrepel::geom_text_repel(aes(label = ifelse(abs(log2fc) > 2,
-                                       as.character(te), '')),
-                         box.padding = unit('0.5', 'lines'),
-                         segment.color = 'gray',
-                         segment.alpha = 0.2,
-                         color = 'black',
-                         ylim = c(0.5, Inf), size = rel(2.5))
+  # ggrepel::geom_text_repel(aes(label = ifelse(abs(log2fc) > 2,
+  #                                      as.character(te), '')),
+  #                        box.padding = unit('0.5', 'lines'),
+  #                        segment.color = 'gray',
+  #                        segment.alpha = 0.2,
+  #                        color = 'black',
+  #                        ylim = c(0.5, Inf), size = rel(2.5))
 }
 
 # plot.te.volcano(total.sleuth.out)
@@ -1269,6 +1303,7 @@ te.ha1em.sleuth.plt <-
   plot.te.volcano(ha1em.sleuth.out %>% filter(approach == 'te-only')) + 
   theme(legend.position = 'null')
 te.ha1em.sleuth.plt
+
 # ggsave(plot = te.ha1em.sleuth.plt, '../figures/fig.3/te-only.ha1em.te.volcano.2.5x3.5.pdf',
 #        height = 2.5, width = 3.5, units = 'in')
 ```
@@ -1369,7 +1404,10 @@ subset.alu.editing.out <- read_csv(paste0(rna.edit.path,
 
 #ggsave('figures/fig.3/subset.sc.editing.3x3.25.pdf', height = 3, width = 3.25, units = 'in')
 ```
-### F: nanosight
+
+## Figure 4:
+
+### A: nanosight
 ```{r}
 ## dilution factor == 200
 kras.sight <- read_csv('../data/other/wetlab/kras.nanosight.data.csv', skip = 2,
@@ -1404,7 +1442,237 @@ nanosight.size.dist.plt <-
 nanosight.size.dist.plt
 # ggsave('../figures/fig.3/nanosight.spline.2.5x3.5.pdf', height = 2.5, width = 3.5, units = 'in')
 ```
-### G: exo editing
+### B: exo v intra DE Volcano
+```{r}
+plot.exo.volcano <- function(quant.file) {
+  quant.file <- quant.file %>% 
+  # for pval == 0, set to the lowest observed pval non 0 pvalue
+  mutate(padj = ifelse(padj == 0,
+                       8.402919e-301,
+                       padj))
+
+  quant.file <- quant.file %>% 
+    mutate(biotype = ifelse(gene %in% gen.32.lnc$gene, 'lncRNA', 'protein_coding'))
+  
+  ggplot(quant.file, aes(y=-log10(padj),
+                     x=-log2fc, 
+         color = biotype)) + 
+  theme(axis.line = element_blank()) +
+  geom_point(size = rel(1), alpha = 0.5, color = viridis(3)[2]) + 
+  geom_rug(size = rel(0.5),length = unit(rel(0.1), 'cm'), 
+           alpha = 0.3,color = viridis(3)[2]) + 
+  scale_x_continuous(limits = c(-23, 23)) +
+  xlab('log2(Fold Change)') +
+  ylab('-log10(padj)') +
+  geom_hline(yintercept = -log10(0.05), linetype='dotted', alpha = 0.4) +
+  geom_vline(xintercept = 0, linetype='dotted', alpha = 0.4) +
+  geom_hline(yintercept = -log10(0.05), linetype='dotted', alpha = 0.4) +
+  # geom_vline(xintercept = c(-1,0,1), linetype='dotted', alpha = 0.4) +
+  # scale_color_manual(name='', values = c(viridis(1),viridis(3)[2])) +
+  facet_col(~biotype, strip.position = 'right') + theme(plot.margin=margin(1,2,2,2,unit = "mm"),
+                                                        strip.text = element_text(size = rel(1.5)))
+# 
+#   ggrepel::geom_text_repel(aes(label = ifelse(abs(log2fc) > 16,
+#                                        as.character(gene), '')),
+#                          box.padding = unit('0.5', 'lines'),
+#                          segment.color = 'gray',
+#                          segment.alpha = 0.2,
+#                          color = 'black',
+#                          ylim = c(0.5, Inf), size = rel(2.5))
+} 
+
+exo.aale.de.seq.plt <- plot.exo.volcano(exo.vs.intra.kras.de.seq)
+exo.aale.de.seq.plt
+
+# ggsave('../figures/fig.5/exo.v.intra.facet.volcano.2.5x3.25.pdf', height = 2.5, width = 3.25, units = 'in')
+
+```
+### C: intra v exo log2FC
+```{r}
+# RidgePlot(kras.aale.sc, features = neuro.diff.markers$gene)
+# carla.epi.markers <- c('EPCAM', 'PDPN', 'SFTPB', 'SFTPD', 'FOXJ1', 
+#                        'SCGB1A1', 'ETV4', 'SOX9', 'ETV5', 'FOXQ1', 'TM4SF1', 'LEF1',
+#                        'COL1A1', 'PECAM1')
+# 
+# neuro.diff.markers <- read_csv('../data/other/wetlab/ras.markers.csv', col_names = c('gene', 'lineage'))
+# 
+# yang.markers <- read_tsv('../data/other/wetlab/yang_et_al.ts_score_gencode.v19.tsv') %>% filter(ts_score >= 3)
+yang.ts.score.gtex <-
+   read_tsv('../data/other/wetlab/yang_et_al.ts_score_gencode.v19.tsv',
+            col_names = c('ensg','gene','tissue','tpm','group','ts_score'),
+            skip = 1) %>%
+   filter(ts_score > 3) %>%
+   group_by(gene) %>%
+   filter(ts_score == max(ts_score)) %>%
+   separate(tissue, sep = ' - ', into = c('tissue', NA)) %>% 
+  distinct(gene, tissue)
+
+
+plot.intra.v.exo.scatter <- function()
+  
+# exo.aale.de.seq.plt/ 
+exo.aale.de.seq %>% 
+  merge(aale.de.seq, by = 'gene') %>% 
+  # filter(gene %in% yang.markers$Description) %>%
+  # merge(yang.ts.score.gtex, by = 'gene') %>% 
+  ggplot(aes(log2fc.x, log2fc.y, label = gene)) + 
+  geom_smooth(method = 'lm', se = T, size = 0.42, color = viridis(3)[2], alpha = 0.15) +
+  geom_point(size = rel(1), alpha = 0.5, color = viridis(3)[2]) + 
+  geom_rug(size = rel(0.5),length = unit(rel(0.1), 'cm'), 
+           alpha = 0.3, color = viridis(3)[2]) +
+  ggpubr::stat_cor(show.legend = F, inherit.aes = T, size = rel(3),
+                   label.x.npc = 'left', label.y.npc = 1) +
+  ggrepel::geom_text_repel(aes(label = ifelse(log2fc.x > 0 & log2fc.y > 0 | 
+                                                log2fc.x < -2 & log2fc.y < 0 & gene %in% yang.ts.score.gtex$gene | 
+                                                log2fc.x < -3 & log2fc.y < 0,
+                                     as.character(gene), '')),
+                       box.padding = unit('0.5', 'lines'),
+                       segment.color = 'gray',
+                       segment.alpha = 0.4,
+                       color = 'black',
+                       ylim = c(-5, Inf), size = rel(2.5)) + 
+  geom_hline(yintercept = 0, linetype = 'dashed', alpha = 0.4) +
+  geom_vline(xintercept = 0, linetype = 'dashed', alpha = 0.4) + 
+  xlim(-7,7) +
+  ylab('intracellular log2 Fold Change') + xlab('exosomal log2 Fold Change') 
+
+exo.aale.de.seq %>% 
+  merge(aale.de.seq, by = 'gene', all = T) %>% 
+  filter(!is.na(baseMean.x)) %>% 
+  mutate(shared = ifelse(is.na(baseMean.y), 'yes', 'no'))
+
+
+exo.aale.norm.counts %>% 
+  merge(exotic.gencode.norm.counts, by = 'X1') %>% 
+  select(X1, contains('kras'),  -contains('rneasy')) %>% 
+  mutate(exo.mean = rowMeans(.[,c(2,3,4)])) %>% 
+  filter(X1 %in% gen.32.lnc$gene) %>% 
+  ggplot(aes(exo.mean, exotic.kras)) + 
+  geom_point() + xlim(0,5000) +
+  ggrepel::geom_text_repel(aes(label = ifelse(exo.mean > 1000 & exotic.kras > 500,
+                                     as.character(X1), '')),
+                       box.padding = unit('0.5', 'lines'),
+                       segment.color = 'gray',
+                       segment.alpha = 0.4,
+                       color = 'black',
+                       ylim = c(-5, Inf), size = rel(2.5))
+
+exotic.gencode.norm.counts %>% 
+  filter(X1 %in% gen.32.lnc$gene, X1 %in% exo.vs.intra.kras.de.seq$gene) %>% 
+  ggplot(aes(exotic.kras, rneasy.kras, label = X1)) + 
+  geom_point() +
+  ggrepel::geom_text_repel(
+                     box.padding = unit('0.5', 'lines'),
+                     segment.color = 'gray',
+                     segment.alpha = 0.4,
+                     color = 'black',
+                     ylim = c(-5, Inf), size = rel(2.5))
+
+
+ggsave('../figures/fig.5/intra.exo.scatter.2.5x6.7.pdf', height = 2.5, width = 6.7, units = 'in')
+
+
+```
+### D: TE volcano
+```{r}
+plot.te.volcano <- function(quant.file) {
+  #quant.file <- merge(quant.file, znf.names, by.x = 'Gene', by.y = 'V1')
+  ggplot(quant.file, aes(y=-log10(qval),
+                     x=log2fc,
+         color = clade)) +
+    theme(axis.line = element_blank()) + 
+  geom_point(size = rel(1), alpha = 0.5) + 
+  geom_rug(size = rel(0.5),length = unit(rel(0.1), 'cm'), alpha = 0.3) + 
+  #scale_x_continuous(limits = c(-6, 6)) +
+  # scale_y_continuous(limits = c(0,-log10(min(aale.de.seq$padj)))) #+
+  scale_y_continuous(limits = c(0,10)) +
+  xlab('log2(Fold Change)') +
+  ylab('-log10(qval)') + 
+  geom_hline(yintercept = -log10(0.05), linetype='dotted', alpha = 0.4) +
+  geom_vline(xintercept = 0, linetype='dotted', alpha = 0.4) +
+  geom_hline(yintercept = -log10(0.05), linetype='dotted', alpha = 0.4) +
+  geom_vline(xintercept = c(-1,0,1), linetype='dotted', alpha = 0.4) +
+  scale_color_viridis_d(name = 'clade') #+ 
+  # facet_wrap(~approach, ncol = 1) +
+  # ggrepel::geom_text_repel(aes(label = ifelse(abs(log2fc) > 2,
+  #                                      as.character(te), '')),
+  #                        box.padding = unit('0.5', 'lines'),
+  #                        segment.color = 'gray',
+  #                        segment.alpha = 0.2,
+  #                        color = 'black',
+  #                        ylim = c(0.5, Inf), size = rel(2.5))
+}
+
+
+te.aale.sleuth.plt <- 
+  plot.te.volcano(aale.exo.vs.intra.sleuth.out %>% filter(clade %in% c("SINE", "LINE", "LTR"))) #+ 
+
+
+aale.exo.vs.intra.sleuth.out.actual %>% 
+  filter(qval < 0.01, clade %in% c("SINE", "LINE", "LTR"), ! family %in% c('RTE-BovB', 'RTE-X', '5S-Deu-L2', 'Gypsy', 'CR1', 'LTR')) %>%
+  # group_by(te) %>% 
+  select(family, exo, intra) %>% 
+  gather(condition, count, -family) %>%
+  mutate(condition = relevel(as.factor(condition), ref = 'intra')) %>% 
+  ggplot(aes(reorder(family, -count), log(count + 1), color = condition, fill = condition)) + 
+  geom_boxplot(position = position_dodge(width = 1), fill = NA, outlier.colour = NA) + 
+  geom_sina(position = position_dodge(width = 1), alpha = 0.1) + xlab('') +
+  scale_color_manual('condition', values = c(viridis(3)[1], viridis(3)[2])) +
+  scale_fill_manual('condition', values = c(viridis(3)[1], viridis(3)[2]), guide = F) + 
+  stat_compare_means(aes(group = condition), method = 't.test', label = 'p.format', method.args = list(alternative = 'less'))
+  # geom_signif()
+
+# te.aale.sleuth.plt
+# ggsave('../figures/fig.5/te.locus.count.box.5.15x2.5.pdf',
+#        height = 2, width = 5.15, units = 'in')
+
+aale.exo.vs.intra.sleuth.out %>% 
+  filter(clade %in% c("SINE", "LINE", "LTR"), ! family %in% c('RTE-BovB', 'RTE-X', '5S-Deu-L2', 'Gypsy', 'CR1', 'LTR')) %>%
+  # group_by(te) %>% 
+  select(family, contains('kras'), te) %>% 
+  filter_at(vars(contains('kras')), any_vars(. > 10)) %>% 
+  gather(sample, count, -family, -te) %>%
+  mutate(condition = ifelse(grepl('intra', sample), 'intra', 'exo')) %>% 
+  mutate(condition = relevel(as.factor(condition), ref = 'intra')) %>%
+  group_by(condition, te) %>% 
+  mutate(mean.count = mean(count)) %>% 
+  distinct(family, sample, mean.count) %>% 
+  ggplot(aes(reorder(family, -mean.count), log(mean.count + 1), color = condition, fill = condition)) + 
+  geom_boxplot(position = position_dodge(width = 1), fill = NA, outlier.colour = NA) + 
+  geom_sina(position = position_dodge(width = 1), alpha = 0.1) + xlab('') +
+  scale_color_manual('condition', values = c(viridis(3)[1], viridis(3)[2])) +
+  scale_fill_manual('condition', values = c(viridis(3)[1], viridis(3)[2]), guide = F) + 
+  stat_compare_means(aes(group = condition), method = 't.test', 
+                     label = 'p.format', method.args = list(alternative = 'less'), hide.ns = T, size = rel(2.5))
+
+# ggsave('../figures/fig.5/te.locus.count.box.5.15x2.5.pdf',
+#        height = 2, width = 5.15, units = 'in')
+
+
+
+aale.exo.vs.intra.sleuth.out %>% 
+  filter(clade %in% c("SINE", "LINE", "LTR"), 
+         ! family %in% c('RTE-BovB', 'RTE-X', '5S-Deu-L2', 'Gypsy', 'CR1', 'LTR')) %>%
+  filter_at(vars(contains('kras')), any_vars(. > 10)) %>% 
+  select(contains('kras'), family) %>% 
+  gather(sample, count, -family) %>% 
+  group_by(sample, family) %>% 
+  summarize(mean.count = mean(count)) %>% 
+  spread(sample, mean.count) %>% 
+  column_to_rownames('family') %>% 
+  pheatmap::pheatmap(color = viridis(12), 
+                     border_color = 'grey',
+                     treeheight_col = 7,
+                     treeheight_row = 7,
+                     fontsize = 7,
+                     width = 5.15, height = 2, angle_col = 0) -> te.locus.heat
+
+# save_pheatmap_pdf(te.locus.heat, '../figures/fig.5/te.marker.heat.pdf', height = 2, width = 5.15)
+  
+  # theme(legend.position = 'null')
+
+```
+### E: exo editing
 ```{r}
 rna.edit.path <- '../data/bulk.rna.seq/aale/output/exo.alu.edit.out/'
 
@@ -1433,42 +1701,9 @@ subset.alu.editing.out
 # ggsave('../figures/fig.3/subset.exo.editing.2.5x1.625.pdf', 
 #        height = 2.5, width = 1.625, units = 'in')
 ```
-### H: exo alu expression
-```{r}
-exo.alu.heatmap <- 
-  aale.exo.sleuth.out %>%
-  filter(te %in% 
-           filter(aale.sleuth.out, log2fc > 0)$te) %>% 
-  filter(grepl('Alu', te)) %>%
-  # select(te, ctrl, kras) %>% 
-  # gather(condition, count, -te) %>% 
-  # ggplot(aes(te, log(count + 1), color = condition)) + 
-  # geom_sina()
-  
-  group_by(te) %>% 
-  summarize(ctrl = mean(ctrl), kras = mean(kras)) %>% 
-  gather(condition, count, -te) %>% 
-  mutate(count = log(count + 1)) %>%
-  spread(condition, count) %>% 
-  column_to_rownames('te') %>% 
-  # as.matrix() %>% 
-  # t() %>% 
-  # as.data.frame() %>% 
-  # column_to_rownames('te') %>%
-  pheatmap::pheatmap(color = viridis(512), 
-                     border_color = NA,
-                     treeheight_col = 7,
-                     treeheight_row = 7,
-                     fontsize = 7,
-                     show_colnames = T, angle_col = 0,
-                     width = 2.5, height = 1.625, cluster_cols = F)
-exo.alu.heatmap
 
-# save_pheatmap_pdf(exo.alu.heatmap, '../figures/fig.3/exo.alu.heat.pdf', 
-#                   height = 2.5, width = 1.625)
-```
 
-## Figure 4:
+## Figure 5:
 
 ### A: ZNF volcano
 ```{r}
