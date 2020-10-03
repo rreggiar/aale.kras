@@ -1,0 +1,3009 @@
+---
+title: "RNA Seq Analysis"
+author: "Roman Reggiardo"
+date: "7/10/2019"
+output:
+  html_document: 
+    toc: true
+    toc_depth: 4
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+### Load in
+```{r echo=FALSE}
+suppressPackageStartupMessages({
+  library(tidyverse)
+  library(ggsci)
+  library(ggrepel)
+  library(ggforce)
+  library(ggthemes)
+  library(ggsignif)
+  library(cowplot)
+  library(extrafont)
+  library(scales)
+  library(fgsea)
+  library(msigdbr)
+  library(ggpubr)
+  library(grid)
+  library(ggtern)
+  library(viridis)
+})
+
+suppressMessages(loadfonts())
+
+theme_set(theme_foundation(base_size = 7, base_family = 'Helvetica') + 
+            theme(plot.title = element_blank(),
+                panel.background = element_rect(colour = NA),
+                plot.background = element_rect(colour = NA),
+                panel.border = element_rect(colour = NA),
+                axis.title = element_text(face = "bold",size = rel(1)),
+                axis.title.y = element_text(angle=90,vjust =2),
+                axis.title.x = element_text(vjust = -0.2),
+                axis.text = element_text(), 
+                axis.line = element_blank(),
+                strip.text = element_text(),
+                strip.background = element_blank(),
+                legend.key.size= unit(0.2, "cm"),
+                legend.spacing = unit(0, "cm"),
+                legend.title = element_text(face="italic"),
+                legend.text = element_text(face = 'bold'),
+                plot.margin=margin(10,5,5,5,unit = "mm"),
+                panel.grid.major = element_blank(),
+                panel.grid.minor = element_blank(),
+          ))
+
+
+```
+
+### Sleuth Output
+```{r}
+aale.quant <- read.csv('data/aale.quant.data.log2fc.csv')[, -1] %>% 
+  separate(Name, sep = '\\|', into = c('ENST', 'ENSG', 'OTTG', 'OTTT', 'TX', 'GENE', 'LEN', 'TYPE'))
+ha1em.quant <- read.csv('data/ha1em.quant.data.log2fc.csv')[, -1] %>% 
+  separate(Name, sep = '\\|', into = c('ENST', 'ENSG', 'OTTG', 'OTTT', 'TX', 'GENE', 'LEN', 'TYPE'))
+```
+
+#### IFN boxplot:
+```{r}
+stdev.aale.quant <- read.csv('data/no.merge.quant.data.log2fc.csv')[, -1] %>% 
+  separate(Name, sep = '\\|', into = c('ENST', 'ENSG', 'OTTG', 'OTTT', 'TX', 'GENE', 'LEN', 'TYPE'))
+
+ifn.aale.quant <- 
+  stdev.aale.quant %>% 
+  filter(grepl('^IFN', GENE)) %>% 
+  select(GENE, avg_kras, avg_ctrl, std_kras, std_ctrl) %>% 
+  gather(condition, avg, -GENE) %>% 
+  separate(condition, sep = '_', 
+           into = c('measure', 'condition')) %>% 
+  group_by(GENE, measure, condition) %>% 
+  summarize(total = sum(avg)) %>% 
+  pivot_wider(names_from = measure,
+              values_from = total)
+
+ifn.aale.quant$condition <- factor(ifn.aale.quant$condition, levels = c('ctrl', 'kras'))
+
+ggplot(ifn.aale.quant,
+       aes(x = reorder(GENE, - avg), 
+           ymin = avg - std,
+           y = avg,
+           ymax = avg + std,
+           color = condition)) + 
+    geom_hline(yintercept = c(0,20,40,60),
+             color = 'grey',
+             linetype = 'dotted') + 
+  geom_errorbar(stat = 'identity', position = position_dodge2(width = 1, reverse = F)) +
+  geom_point(stat = 'identity', position = position_dodge2(width = 1, reverse = F)) +
+  scale_color_manual(name = '', values = c('#FDE725FF','#440154FF')) + 
+
+  xlab('') + 
+  ylab('TPM') + 
+  theme(axis.text.x = element_text(angle = 40, hjust = 1))
+```
+
+#### Total DE Volcano Plots:
+```{r}
+plot.de.volcano <- function(quant.file) {
+  ggplot(quant.file, aes(y=-log10(pval),
+                     x=log2fc,
+         color = ifelse(abs(log2fc) > 1 & pval < 0.05, 'not', 'sig'))) +
+    theme(axis.line = element_blank()) +
+  geom_point(size = 2, alpha = 0.5) + 
+    geom_rug(size = 1, alpha = 0.3) + 
+  scale_x_continuous(limits = c(-11, 11)) +
+  scale_y_continuous(limits = c(0, 12)) +
+  xlab('log2(Fold Change)') +
+  ylab('-log10(pvalue)') + 
+  geom_hline(yintercept = -log10(0.05), linetype='dotted', alpha = 0.4) +
+  geom_vline(xintercept = 0, linetype='dotted', alpha = 0.4) +
+  geom_hline(yintercept = -log10(0.05), linetype='dotted', alpha = 0.4) +
+  geom_vline(xintercept = c(-1,0,1), linetype='dotted', alpha = 0.4) + 
+  scale_color_manual(name='', guide = F, values = c('black','grey')) + 
+    ggrepel::geom_text_repel(aes(label =
+    ifelse(abs(-log10(pval)) > 1.3 & abs(log2fc) > 3.5, 
+                                        as.character(TX), '')),
+                          box.padding = unit('0.2', 'lines'),
+                          segment.color = 'gray',
+                          color = 'black',
+                          ylim = c(1.3, Inf), size = 4) 
+}
+
+plot.de.volcano(ha1em.quant)
+plot.de.volcano(aale.quant)
+```
+
+#### ZNF Volcano Plots:
+```{r}
+ZNFs <- c('ZNF695','ZNF662','ZNF354A','ZNF354C','ZNF736','ZKSCAN5','ZNF655','ZKSCAN1','ZSCAN21','ZNF425','ZNF34','ZFP92','ZNF202','ZNF605',
+'ZNF140','ZNF10','ZNF268','ZNF75A','ZNF557','ZNF558','ZNF699','ZNF426','ZNF561','ZNF627','ZNF823','ZNF433','ZNF844','ZNF788','ZNF563','ZNF442',
+'ZNF791','ZNF506','ZNF253','ZNF93','ZNF682','ZNF90','ZNF486','ZNF737','ZNF626','ZNF85','ZNF429','ZNF492','ZFP82','ZNF382','ZNF568','ZNF569',
+'ZNF570','ZNF607','ZNF649','ZNF610','ZNF880','ZNF528','ZNF83','ZNF415','ZNF347','ZNF525','ZNF582','ZNF583','ZNF667','ZNF471','ZNF586','ZNF552',
+'ZNF814','ZNF135','ZNF441','ZNF257','ZFP14','ZNF665','ZNF793','ZNF730','ZNF133','ZNF334')
+znf.names <- read.delim('data/znf.names', header = F)
+znf.names$class <- ifelse(znf.names$V1 %in% ZNFs, 'KRAB', 'OTHER')
+
+plot.znf.volcano <- function(quant.file) {
+  quant.file <- merge(quant.file, znf.names, by.x = 'GENE', by.y = 'V1')
+  ggplot(quant.file, aes(y=-log10(pval),
+                     x=log2fc,
+         color = class )) +
+    theme(axis.line = element_blank()) + 
+  geom_point(size = 2, alpha = 0.5) + 
+    geom_rug(size = 1, alpha = 0.3) + 
+  scale_x_continuous(limits = c(-4, 4)) +
+  scale_y_continuous(limits = c(0, 12)) +
+  xlab('log2(Fold Change)') +
+  ylab('-log10(pvalue)') + 
+  geom_hline(yintercept = -log10(0.05), linetype='dotted', alpha = 0.4) +
+  geom_vline(xintercept = 0, linetype='dotted', alpha = 0.4) +
+  geom_hline(yintercept = -log10(0.05), linetype='dotted', alpha = 0.4) +
+  geom_vline(xintercept = c(-1,0,1), linetype='dotted', alpha = 0.4) + 
+  scale_color_manual(name='', guide = F, values = c('forestgreen','grey')) +
+  ggrepel::geom_text_repel(aes(label = 
+  ifelse(abs(-log10(pval)) > 1.3 & abs(log2fc) > 1.2 & class == 'KRAB', 
+                                        as.character(TX), '')),
+                          box.padding = unit('0.2', 'lines'),
+                          segment.color = 'gray',
+                          color = 'black',
+                          ylim = c(1.3, Inf), size = 4) 
+}
+
+plot.znf.volcano(ha1em.quant)
+plot.znf.volcano(aale.quant)
+```
+
+#### ISG Volcano Plots:
+```{r}
+isg.names <- c('IFI44L', 'DDX58', 'IFIH1', 'MAVS', 'IRF3', 'IRF7', 'IFNL1', 'IRF9', 'STAT1',
+          'IFI27', 'OAS2', 'IFIT3', 'IFIT1', 'OASL', 'ISG15', 'OAS3', 'RSAD2', 'MX1',
+          'OAS1', 'IFI44', 'CH25H', 'IFIT2', 'ISG20', 'RNASEL', 'IFI6')
+
+
+plot.isg.volcano <- function(quant.file) {
+  quant.file <- subset(quant.file, GENE %in% isg.names)
+  ggplot(quant.file, aes(y=-log10(pval),
+                     x=log2fc,
+         color = ifelse(abs(log2fc) > 1 & pval < 0.05, 'not', 'sig'))) +
+    theme(axis.line = element_blank()) + 
+  geom_point(size = 2, alpha = 0.5) + 
+    geom_rug(size = 1, alpha = 0.3, position = 'jitter') + 
+  scale_x_continuous(limits = c(-4, 4)) +
+  scale_y_continuous(limits = c(0, 12)) +
+  xlab('log2(Fold Change)') +
+  ylab('-log10(pvalue)') + 
+  geom_hline(yintercept = -log10(0.05), linetype='dotted', alpha = 0.4) +
+  geom_vline(xintercept = 0, linetype='dotted', alpha = 0.4) +
+  geom_hline(yintercept = -log10(0.05), linetype='dotted', alpha = 0.4) +
+  geom_vline(xintercept = c(-1,0,1), linetype='dotted', alpha = 0.4) + 
+  scale_color_manual(name='', guide = F, values = c('black','grey')) +
+  ggrepel::geom_text_repel(aes(label = 
+  ifelse(abs(-log10(pval)) > 1.3 & abs(log2fc) > 1.5 , 
+                                        as.character(TX), '')),
+                          box.padding = unit('0.5', 'lines'),
+                          segment.color = 'gray',
+                          color = 'black',
+                          ylim = c(0.5, Inf), size = 4)
+} 
+  
+plot.isg.volcano(ha1em.quant)
+plot.isg.volcano(aale.quant)
+
+```
+
+#### lncRNA Volcano Plots:
+```{r}
+lnc.names <- read.delim('data/lnc.names.txt', header = F)
+
+plot.lnc.volcano <- function(quant.file) {
+  quant.file <- subset(quant.file, GENE %in% lnc.names$V1)
+  ggplot(quant.file, aes(y=-log10(pval),
+                     x=log2fc,
+         color = ifelse(abs(log2fc) > 1 & pval < 0.05, 'not', 'sig'))) +
+    theme(axis.line = element_blank()) +
+  geom_point(size = 2, alpha = 0.5) +  
+  geom_rug(size = 1, alpha = 0.3) + 
+  scale_x_continuous(limits = c(-4, 4)) +
+  scale_y_continuous(limits = c(0, 12)) +
+  xlab('log2(Fold Change)') +
+  ylab('-log10(pvalue)') + 
+  geom_hline(yintercept = -log10(0.05), linetype='dotted', alpha = 0.4) +
+  geom_vline(xintercept = 0, linetype='dotted', alpha = 0.4) +
+  geom_hline(yintercept = -log10(0.05), linetype='dotted', alpha = 0.4) +
+  geom_vline(xintercept = c(-1,0,1), linetype='dotted', alpha = 0.4) + 
+  scale_color_manual(name='', guide = F, values = c('black','grey')) +
+  ggrepel::geom_text_repel(aes(label = 
+  ifelse(abs(-log10(pval)) > 1.3 & abs(log2fc) > 1.3 , 
+                                        as.character(TX), '')),
+                          box.padding = unit('0.2', 'lines'),
+                          segment.color = 'gray',
+                          color = 'black',
+                          ylim = c(0, Inf), size = 4)
+} 
+
+plot.lnc.volcano(ha1em.quant)
+plot.lnc.volcano(aale.quant)
+```
+
+#### Chromatin Modifiers Volcano Plots:
+```{r}
+hdac <- c('HDAC1', 'HDAC2', 'HDAC3', 'HDAC4', 'HDAC8', 'HDAC5', 'HDAC6', 'HDAC7', 'HDAC9', 'HDAC10', 'HDAC11', 'SIRT1', 'SIRT2', 'SIRT3', 'SIRT4', 'SIRT5', 'SIRT6', 'SIRT7')
+tet <- c('TET1', 'TET2', 'TET3', 'TET2-AS1', 'TET1P1')
+dnmt <- c('DNMT1', 'DNMT3A', 'DNMT3B', 'DNMT3L')
+kdm <- c('KDM1A', 'KDM1B', 'KDM2A', 'KDM2B', 'KDM3A', 'KDM3B', 'KDM4A', 
+          'KDM4B', 'KDM4C', 'KDM4D', 'KDM4E', 'KDM4F', 'KDM5A', 'KDM5B',
+          'KDM5C', 'KDM5D', 'KDM6A', 'KDM6B', 'KDM7A', 'KDM8')
+
+plot.hdac.volcano <- function(quant.file) {
+  quant.file <- subset(quant.file, GENE %in% hdac)
+  ggplot(quant.file, aes(y=-log10(pval),
+                     x=log2fc,
+         color = ifelse(abs(log2fc) > 1 & pval < 0.05, 'not', 'sig'))) +
+    theme(axis.line = element_blank()) +
+  geom_point(size = 2, alpha = 0.5) +  
+  geom_rug(size = 1, alpha = 0.3) + 
+  scale_x_continuous(limits = c(-4, 4)) +
+  scale_y_continuous(limits = c(0, 12)) +
+  xlab('log2(Fold Change)') +
+  ylab('-log10(pvalue)') + 
+  geom_hline(yintercept = -log10(0.05), linetype='dotted', alpha = 0.4) +
+  geom_vline(xintercept = 0, linetype='dotted', alpha = 0.4) +
+  geom_hline(yintercept = -log10(0.05), linetype='dotted', alpha = 0.4) +
+  geom_vline(xintercept = c(-1,0,1), linetype='dotted', alpha = 0.4) + 
+  scale_color_manual(name='', guide = F, values = c('black','grey')) +
+  ggrepel::geom_text_repel(aes(label = 
+  ifelse(abs(-log10(pval)) > 1.3 & abs(log2fc) > 1.3 , 
+                                        as.character(TX), '')),
+                          box.padding = unit('0.2', 'lines'),
+                          segment.color = 'gray',
+                          color = 'black',
+                          ylim = c(0, Inf), size = 4)
+}
+plot.tet.volcano <- function(quant.file){
+  quant.file <- subset(quant.file, GENE %in% tet)
+  ggplot(quant.file, aes(y=-log10(pval),
+                     x=log2fc,
+         color = ifelse(abs(log2fc) > 1 & pval < 0.05, 'not', 'sig'))) +
+    theme(axis.line = element_blank()) +
+  geom_point(size = 2, alpha = 0.5) +  
+  geom_rug(size = 1, alpha = 0.3) + 
+  scale_x_continuous(limits = c(-4, 4)) +
+  scale_y_continuous(limits = c(0, 12)) +
+  xlab('log2(Fold Change)') +
+  ylab('-log10(pvalue)') + 
+  geom_hline(yintercept = -log10(0.05), linetype='dotted', alpha = 0.4) +
+  geom_vline(xintercept = 0, linetype='dotted', alpha = 0.4) +
+  geom_hline(yintercept = -log10(0.05), linetype='dotted', alpha = 0.4) +
+  geom_vline(xintercept = c(-1,0,1), linetype='dotted', alpha = 0.4) + 
+  scale_color_manual(name='', guide = F, values = c('black','grey')) +
+  ggrepel::geom_text_repel(aes(label = 
+  ifelse(abs(-log10(pval)) > 1.3 & abs(log2fc) > 1.3 , 
+                                        as.character(TX), '')),
+                          box.padding = unit('0.2', 'lines'),
+                          segment.color = 'gray',
+                          color = 'black',
+                          ylim = c(0, Inf), size = 4)
+}
+plot.kdm.volcano <- function(quant.file){
+  quant.file <- subset(quant.file, GENE %in% kdm)
+  ggplot(quant.file, aes(y=-log10(pval),
+                     x=log2fc,
+         color = ifelse(abs(log2fc) > 1 & pval < 0.05, 'not', 'sig'))) +
+    theme(axis.line = element_blank()) +
+  geom_point(size = 2, alpha = 0.5) +  
+  geom_rug(size = 1, alpha = 0.3) + 
+  scale_x_continuous(limits = c(-4, 4)) +
+  scale_y_continuous(limits = c(0, 12)) +
+  xlab('log2(Fold Change)') +
+  ylab('-log10(pvalue)') + 
+  geom_hline(yintercept = -log10(0.05), linetype='dotted', alpha = 0.4) +
+  geom_vline(xintercept = 0, linetype='dotted', alpha = 0.4) +
+  geom_hline(yintercept = -log10(0.05), linetype='dotted', alpha = 0.4) +
+  geom_vline(xintercept = c(-1,0,1), linetype='dotted', alpha = 0.4) + 
+  scale_color_manual(name='', guide = F, values = c('black','grey')) +
+  ggrepel::geom_text_repel(aes(label = 
+  ifelse(abs(-log10(pval)) > 1.3 & abs(log2fc) > 1.3 , 
+                                        as.character(TX), '')),
+                          box.padding = unit('0.2', 'lines'),
+                          segment.color = 'gray',
+                          color = 'black',
+                          ylim = c(0, Inf), size = 4)
+}
+plot.dnmt.volcano <- function(quant.file){
+  quant.file <- subset(quant.file, GENE %in% dnmt)
+  ggplot(quant.file, aes(y=-log10(pval),
+                     x=log2fc,
+         color = ifelse(abs(log2fc) > 1 & pval < 0.05, 'not', 'sig'))) +
+    theme(axis.line = element_blank()) +
+  geom_point(size = 2, alpha = 0.5) +  
+  geom_rug(size = 1, alpha = 0.3) + 
+  scale_x_continuous(limits = c(-4, 4)) +
+  scale_y_continuous(limits = c(0, 12)) +
+  xlab('log2(Fold Change)') +
+  ylab('-log10(pvalue)') + 
+  geom_hline(yintercept = -log10(0.05), linetype='dotted', alpha = 0.4) +
+  geom_vline(xintercept = 0, linetype='dotted', alpha = 0.4) +
+  geom_hline(yintercept = -log10(0.05), linetype='dotted', alpha = 0.4) +
+  geom_vline(xintercept = c(-1,0,1), linetype='dotted', alpha = 0.4) + 
+  scale_color_manual(name='', guide = F, values = c('black','grey')) +
+  ggrepel::geom_text_repel(aes(label = 
+  ifelse(abs(-log10(pval)) > 1.3 & abs(log2fc) > 1 , 
+                                        as.character(TX), '')),
+                          box.padding = unit('0.2', 'lines'),
+                          segment.color = 'gray',
+                          color = 'black',
+                          ylim = c(0, Inf), size = 4)
+  
+} 
+
+
+plot.kdm.volcano(ha1em.quant)
+plot.dnmt.volcano(ha1em.quant)
+plot.hdac.volcano(ha1em.quant)
+plot.tet.volcano(ha1em.quant)
+
+```
+
+### DESeqII Output:
+*import DEseq output files*
+```{r}
+ha1em.de.seq <- read.csv('../data/real.data/ha1em.kras.v.ctrl.de-seq.csv') %>% 
+  filter(padj < 0.01, padj > 0)
+names(ha1em.de.seq) <- c('Gene', 'baseMean', 'log2fc', 'lfcse', 'pval', 'padj')
+aale.de.seq <- read.csv('data/aale.intra.kras.v.ctrl.de-seq.csv') %>% 
+  filter(padj < 0.01, padj > 0)
+names(aale.de.seq) <- c('Gene', 'baseMean', 'log2fc', 'lfcse', 'pval', 'padj')
+
+```
+
+#### Total DE Volcano Plots:
+```{r}
+plot.de.volcano <- function(quant.file) {
+  ggplot(quant.file, aes(y=-log10(padj),
+                     x=log2fc,
+         color = ifelse(abs(log2fc) > 1 & padj < 0.01, 'not', 'sig'))) +
+    theme(axis.line = element_blank()) +
+  geom_point(size = rel(1), alpha = 0.5) + 
+  geom_rug(size = rel(0.5),length = unit(rel(0.5), 'cm'), alpha = 0.3) + 
+  #scale_x_continuous(limits = c(-13, 13)) +
+  #scale_y_continuous(limits = c(0, 350)) +
+  xlab('log2(Fold Change)') +
+  ylab('-log10(pvalue)') + 
+  geom_hline(yintercept = -log10(0.05), linetype='dotted', alpha = 0.4) +
+  geom_vline(xintercept = 0, linetype='dotted', alpha = 0.4) +
+  geom_hline(yintercept = -log10(0.05), linetype='dotted', alpha = 0.4) +
+  geom_vline(xintercept = c(-1,0,1), linetype='dotted', alpha = 0.4) + 
+  scale_color_manual(name='', guide = F, values = c('black','grey')) +
+   ggrepel::geom_text_repel(aes(label =
+   ifelse(Gene %in% liu.ifn.signature,
+          as.character(Gene), '')),
+                         segment.color = 'gray',
+                         color = 'black',
+                         ylim = c(1.3, Inf), size = rel(1))
+}
+
+total.ha1em.de.seq <- plot.de.volcano(ha1em.de.seq)
+total.aale.de.seq <- plot.de.volcano(aale.de.seq)
+total.aale.de.seq
+```
+
+#### ZNF Volcano Plots:
+```{r}
+znf.names <- read.delim('data/znf.names', header = F)
+znf.names$class <- ifelse(znf.names$V1 %in% ZNFs, 'KRAB', 'OTHER')
+
+plot.znf.volcano <- function(quant.file) {
+  quant.file <- merge(quant.file, znf.names, by.x = 'Gene', by.y = 'V1')
+  ggplot(quant.file, aes(y=-log10(pval),
+                     x=log2fc,
+         color = class )) +
+    theme(axis.line = element_blank()) + 
+  geom_point(size = 2, alpha = 0.5) + 
+    geom_rug(size = 1, alpha = 0.3) + 
+  scale_x_continuous(limits = c(-6, 6)) +
+  scale_y_continuous(limits = c(0, 75)) +
+  xlab('log2(Fold Change)') +
+  ylab('-log10(pvalue)') + 
+  geom_hline(yintercept = -log10(0.05), linetype='dotted', alpha = 0.4) +
+  geom_vline(xintercept = 0, linetype='dotted', alpha = 0.4) +
+  geom_hline(yintercept = -log10(0.05), linetype='dotted', alpha = 0.4) +
+  geom_vline(xintercept = c(-1,0,1), linetype='dotted', alpha = 0.4) + 
+  scale_color_manual(name='', guide = F, values = c('lightblue','grey')) #+
+#  ggrepel::geom_text_repel(aes(label = 
+#  ifelse(abs(-log10(pval)) > 1.3 & abs(log2fc) > 1.2 & class == 'KRAB', 
+#                                        as.character(Gene), '')),
+#                          box.padding = unit('0.2', 'lines'),
+#                          segment.color = 'gray',
+#                          color = 'black',
+#                          ylim = c(1.3, Inf), size = 4) 
+}
+
+znf.ha1em.de.seq <- plot.znf.volcano(ha1em.de.seq)
+znf.aale.de.seq <- plot.znf.volcano(aale.de.seq)
+```
+
+#### ISG Volcano Plots:
+```{r}
+isg.names <- c('IFI44L', 'DDX58', 'IFIH1', 'MAVS', 'IRF3', 'IRF7', 'IFNL1', 'IRF9', 'STAT1',
+          'IFI27', 'OAS2', 'IFIT3', 'IFIT1', 'OASL', 'ISG15', 'OAS3', 'RSAD2', 'MX1',
+          'OAS1', 'IFI44', 'CH25H', 'IFIT2', 'ISG20', 'RNASEL', 'IFI6',
+          'HERC5', 'HERC6')
+
+
+plot.isg.volcano <- function(quant.file) {
+  quant.file <- subset(quant.file, Gene %in% c(liu.ifn.signature, 
+                                               ifn.signature, 
+                                               msig.df.h.ifng$gene_symbol, 
+                                               msig.df.h.ifna$gene_symbol))
+  ggplot(quant.file, aes(y=-log10(padj),
+                     x=log2fc,
+         color = ifelse(abs(log2fc) > 1 & padj < 0.01, 'not', 'sig'))) +
+    theme(axis.line = element_blank()) +
+  geom_point(size = rel(1), alpha = 0.5) + 
+  geom_rug(size = rel(0.5),length = unit(rel(0.1), 'cm'), alpha = 0.3) + 
+  scale_x_continuous(limits = c(-6, 6)) +
+  scale_y_continuous(limits = c(0,-log10(min(aale.de.seq$padj)))) +
+  xlab('log2(Fold Change)') +
+  ylab('-log10(padj)') + 
+  geom_hline(yintercept = -log10(0.05), linetype='dotted', alpha = 0.4) +
+  geom_vline(xintercept = 0, linetype='dotted', alpha = 0.4) +
+  geom_hline(yintercept = -log10(0.05), linetype='dotted', alpha = 0.4) +
+  geom_vline(xintercept = c(-1,0,1), linetype='dotted', alpha = 0.4) + 
+  scale_color_manual(name='', guide = F, values = c('black','grey')) #+
+ # ggrepel::geom_text_repel(aes(label = ifelse(abs(log2fc) > 2 ,
+ #                                       as.character(Gene), '')),
+ #                         box.padding = unit('0.5', 'lines'),
+ #                         segment.color = 'gray',
+ #                         segment.alpha = 0.2,
+ #                         color = 'black',
+ #                         ylim = c(0.5, Inf), size = rel(1.5))
+} 
+  
+isg.ha1em.de.seq <- plot.isg.volcano(ha1em.de.seq)
+ggsave(plot = isg.ha1em.de.seq, 'figures/fig.1/ha1e.isg.volcano.2.5x3.5.pdf', 
+       height = 2.5, width = 3.5, units = 'in')
+
+isg.aale.de.seq <- plot.isg.volcano(aale.de.seq)
+isg.aale.de.seq
+ggsave(plot = isg.aale.de.seq, 'figures/fig.1/isg.volcano.2.5x3.5.pdf', height = 2.5, width = 3.5, units = 'in')
+
+```
+
+#### lncRNA Volcano Plots:
+```{r}
+lnc.names <- read.delim('data/lnc.names.txt', header = F)
+
+plot.lnc.volcano <- function(quant.file) {
+  quant.file <- subset(quant.file, Gene %in% lnc.names$V1)
+  ggplot(quant.file, aes(y=-log10(pval),
+                     x=log2fc,
+         color = ifelse(abs(log2fc) > 1 & pval < 0.05, 'not', 'sig'))) +
+    theme(axis.line = element_blank()) +
+  geom_point(size = 2, alpha = 0.5) +  
+  geom_rug(size = 1, alpha = 0.3) + 
+  scale_x_continuous(limits = c(-10, 10)) +
+  scale_y_continuous(limits = c(0, 50)) +
+  xlab('log2(Fold Change)') +
+  ylab('-log10(pvalue)') + 
+  geom_hline(yintercept = -log10(0.05), linetype='dotted', alpha = 0.4) +
+  geom_vline(xintercept = 0, linetype='dotted', alpha = 0.4) +
+  geom_hline(yintercept = -log10(0.05), linetype='dotted', alpha = 0.4) +
+  geom_vline(xintercept = c(-1,0,1), linetype='dotted', alpha = 0.4) + 
+  scale_color_manual(name='', guide = F, values = c('black','grey')) #+
+  #ggrepel::geom_text_repel(aes(label = 
+  #ifelse(abs(-log10(pval)) > 1.3 & abs(log2fc) > 2.3 , 
+  #                                      as.character(Gene), '')),
+  #                        box.padding = unit('0.2', 'lines'),
+  #                        segment.color = 'gray',
+  #                        color = 'black',
+  #                        ylim = c(0, Inf), size = 4)
+} 
+
+lnc.ha1em.de.seq <- plot.lnc.volcano(ha1em.de.seq)
+lnc.aale.de.seq <- plot.lnc.volcano(aale.de.seq)
+```
+
+#### Chromatin Modifiers Volcano Plots:
+```{r}
+hdac <- c('HDAC1', 'HDAC2', 'HDAC3', 'HDAC4', 'HDAC8', 'HDAC5', 'HDAC6', 'HDAC7', 'HDAC9', 'HDAC10', 'HDAC11', 'SIRT1', 'SIRT2', 'SIRT3', 'SIRT4', 'SIRT5', 'SIRT6', 'SIRT7')
+tet <- c('TET1', 'TET2', 'TET3', 'TET2-AS1', 'TET1P1')
+dnmt <- c('DNMT1', 'DNMT3A', 'DNMT3B', 'DNMT3L')
+kdm <- c('KDM1A', 'KDM1B', 'KDM2A', 'KDM2B', 'KDM3A', 'KDM3B', 'KDM4A', 
+          'KDM4B', 'KDM4C', 'KDM4D', 'KDM4E', 'KDM4F', 'KDM5A', 'KDM5B',
+          'KDM5C', 'KDM5D', 'KDM6A', 'KDM6B', 'KDM7A', 'KDM8')
+
+plot.hdac.volcano <- function(quant.file) {
+  quant.file <- subset(quant.file, Gene %in% hdac)
+  ggplot(quant.file, aes(y=-log10(pval),
+                     x=log2fc,
+         color = ifelse(abs(log2fc) > 1 & pval < 0.05, 'not', 'sig'))) +
+    theme(axis.line = element_blank()) +
+  geom_point(size = 2, alpha = 0.5) +  
+  geom_rug(size = 1, alpha = 0.3) + 
+  scale_x_continuous(limits = c(-4, 4)) +
+  scale_y_continuous(limits = c(0, 75)) +
+  xlab('log2(Fold Change)') +
+  ylab('-log10(pvalue)') + 
+  geom_hline(yintercept = -log10(0.05), linetype='dotted', alpha = 0.4) +
+  geom_vline(xintercept = 0, linetype='dotted', alpha = 0.4) +
+  geom_hline(yintercept = -log10(0.05), linetype='dotted', alpha = 0.4) +
+  geom_vline(xintercept = c(-1,0,1), linetype='dotted', alpha = 0.4) + 
+  scale_color_manual(name='', guide = F, values = c('black','grey')) #+
+#  ggrepel::geom_text_repel(aes(label = 
+#  ifelse(abs(-log10(pval)) > 1.3 & abs(log2fc) > 0.5 , 
+#                                        as.character(Gene), '')),
+#                          box.padding = unit('0.2', 'lines'),
+#                          segment.color = 'gray',
+#                          color = 'black',
+#                          ylim = c(0, Inf), size = 4)
+}
+plot.tet.volcano <- function(quant.file){
+  quant.file <- subset(quant.file, Gene %in% tet)
+  ggplot(quant.file, aes(y=-log10(pval),
+                     x=log2fc,
+         color = ifelse(abs(log2fc) > 1 & pval < 0.05, 'not', 'sig'))) +
+    theme(axis.line = element_blank()) +
+  geom_point(size = 2, alpha = 0.5) +  
+  geom_rug(size = 1, alpha = 0.3) + 
+  scale_x_continuous(limits = c(-4, 4)) +
+  scale_y_continuous(limits = c(0, 75)) +
+  xlab('log2(Fold Change)') +
+  ylab('-log10(pvalue)') + 
+  geom_hline(yintercept = -log10(0.05), linetype='dotted', alpha = 0.4) +
+  geom_vline(xintercept = 0, linetype='dotted', alpha = 0.4) +
+  geom_hline(yintercept = -log10(0.05), linetype='dotted', alpha = 0.4) +
+  geom_vline(xintercept = c(-1,0,1), linetype='dotted', alpha = 0.4) + 
+  scale_color_manual(name='', guide = F, values = c('black','grey')) #+
+#  ggrepel::geom_text_repel(aes(label = 
+#  ifelse(abs(-log10(pval)) > 1.3 & abs(log2fc) > 0.5 , 
+#                                        as.character(Gene), '')),
+#                          box.padding = unit('0.2', 'lines'),
+#                          segment.color = 'gray',
+#                          color = 'black',
+#                          ylim = c(0, Inf), size = 4)
+}
+plot.kdm.volcano <- function(quant.file){
+  quant.file <- subset(quant.file, Gene %in% kdm)
+  ggplot(quant.file, aes(y=-log10(pval),
+                     x=log2fc,
+         color = ifelse(abs(log2fc) > 1 & pval < 0.05, 'not', 'sig'))) +
+    theme(axis.line = element_blank()) +
+  geom_point(size = 2, alpha = 0.5) +  
+  geom_rug(size = 1, alpha = 0.3) + 
+  scale_x_continuous(limits = c(-4, 4)) +
+  scale_y_continuous(limits = c(0, 75)) +
+  xlab('log2(Fold Change)') +
+  ylab('-log10(pvalue)') + 
+  geom_hline(yintercept = -log10(0.05), linetype='dotted', alpha = 0.4) +
+  geom_vline(xintercept = 0, linetype='dotted', alpha = 0.4) +
+  geom_hline(yintercept = -log10(0.05), linetype='dotted', alpha = 0.4) +
+  geom_vline(xintercept = c(-1,0,1), linetype='dotted', alpha = 0.4) + 
+  scale_color_manual(name='', guide = F, values = c('black','grey')) #+
+#  ggrepel::geom_text_repel(aes(label = 
+#  ifelse(abs(-log10(pval)) > 1.3 & abs(log2fc) > 0.5 , 
+#                                        as.character(Gene), '')),
+#                          box.padding = unit('0.2', 'lines'),
+#                          segment.color = 'gray',
+#                          color = 'black',
+#                          ylim = c(0, Inf), size = 4)
+}
+plot.dnmt.volcano <- function(quant.file){
+  quant.file <- subset(quant.file, Gene %in% dnmt)
+  ggplot(quant.file, aes(y=-log10(pval),
+                     x=log2fc,
+         color = ifelse(abs(log2fc) > 1 & -log10(pval) > 1.3, 'not', 'sig'))) +
+    theme(axis.line = element_blank()) +
+  geom_point(size = 2, alpha = 0.5) +  
+  geom_rug(size = 1, alpha = 0.3) + 
+  scale_x_continuous(limits = c(-4, 4)) +
+  scale_y_continuous(limits = c(0, 75)) +
+  xlab('log2(Fold Change)') +
+  ylab('-log10(pvalue)') + 
+  geom_hline(yintercept = -log10(0.05), linetype='dotted', alpha = 0.4) +
+  geom_vline(xintercept = 0, linetype='dotted', alpha = 0.4) +
+  geom_hline(yintercept = -log10(0.05), linetype='dotted', alpha = 0.4) +
+  geom_vline(xintercept = c(-1,0,1), linetype='dotted', alpha = 0.4) + 
+  scale_color_manual(name='', guide = F, values = c('black','grey')) #+
+#  ggrepel::geom_text_repel(aes(label = 
+#  ifelse(abs(-log10(pval)) > 1.3 & abs(log2fc) > 0.5 , 
+#                                        as.character(Gene), '')),
+#                          box.padding = unit('0.2', 'lines'),
+#                          segment.color = 'gray',
+#                          color = 'black',
+#                          ylim = c(0, Inf), size = 4)
+  
+} 
+
+#print('HA1EM')
+kdm.ha1em.de.seq <- plot.kdm.volcano(ha1em.de.seq)
+dnmt.ha1em.de.seq <- plot.dnmt.volcano(ha1em.de.seq)
+hdac.ha1em.de.seq <- plot.hdac.volcano(ha1em.de.seq)
+tet.ha1em.de.seq <- plot.tet.volcano(ha1em.de.seq)
+#print('AALE')
+kdm.aale.de.seq <- plot.kdm.volcano(aale.de.seq)
+dnmt.aale.de.seq <- plot.dnmt.volcano(aale.de.seq)
+hdac.aale.de.seq <- plot.hdac.volcano(aale.de.seq)
+tet.aale.de.seq <- plot.tet.volcano(aale.de.seq)
+```
+
+#### Cytokine Volcano Plots:
+```{r}
+## cytokines
+cyto.gene.set <- read.table('data/cyto.gene.list.txt')
+
+plot.cyto.volcano <- function(quant.file) {
+  quant.file <- subset(quant.file, Gene %in% cyto.gene.set$V1)
+  ggplot(quant.file, aes(y=-log10(pval),
+                     x=log2fc,
+         color = ifelse(abs(log2fc) > 1 & pval < 0.05, 'not', 'sig'))) +
+    theme(axis.line = element_blank()) +
+  geom_point(size = 2, alpha = 0.5) +  
+  geom_rug(size = 1, alpha = 0.3) + 
+  scale_x_continuous(limits = c(-6, 6)) +
+  scale_y_continuous(limits = c(0, 300)) +
+  xlab('log2(Fold Change)') +
+  ylab('-log10(pvalue)') + 
+  geom_hline(yintercept = -log10(0.05), linetype='dotted', alpha = 0.4) +
+  geom_vline(xintercept = 0, linetype='dotted', alpha = 0.4) +
+  geom_hline(yintercept = -log10(0.05), linetype='dotted', alpha = 0.4) +
+  geom_vline(xintercept = c(-1,0,1), linetype='dotted', alpha = 0.4) + 
+  scale_color_manual(name='', guide = F, values = c('black','grey')) +
+  ggrepel::geom_text_repel(aes(label = 
+  ifelse(abs(-log10(pval)) > 1.3 & abs(log2fc) > 1.25 , 
+                                        as.character(Gene), '')),
+                          box.padding = unit('0.2', 'lines'),
+                          segment.color = 'gray',
+                          color = 'black',
+                          ylim = c(0, Inf), size = 4)
+}
+
+plot.cyto.volcano(aale.de.seq)
+plot.cyto.volcano(ha1em.de.seq)
+```
+
+#### Apoptosis Volcano Plots:
+```{r}
+## apoptosis
+
+apop.gene.set <- read.table('data/apop.gene.list.txt')
+
+plot.apop.volcano <- function(quant.file) {
+  quant.file <- subset(quant.file, Gene %in% apop.gene.set$V1)
+  ggplot(quant.file, aes(y=-log10(pval),
+                     x=log2fc,
+         color = ifelse(abs(log2fc) > 1 & pval < 0.05, 'not', 'sig'))) +
+    theme(axis.line = element_blank()) +
+  geom_point(size = 2, alpha = 0.5) +  
+  geom_rug(size = 1, alpha = 0.3) + 
+  scale_x_continuous(limits = c(-6, 6)) +
+  scale_y_continuous(limits = c(0, 300)) +
+  xlab('log2(Fold Change)') +
+  ylab('-log10(pvalue)') + 
+  geom_hline(yintercept = -log10(0.05), linetype='dotted', alpha = 0.4) +
+  geom_vline(xintercept = 0, linetype='dotted', alpha = 0.4) +
+  geom_hline(yintercept = -log10(0.05), linetype='dotted', alpha = 0.4) +
+  geom_vline(xintercept = c(-1,0,1), linetype='dotted', alpha = 0.4) + 
+  scale_color_manual(name='', guide = F, values = c('black','grey')) +
+  ggrepel::geom_text_repel(aes(label = 
+  ifelse(abs(-log10(pval)) > 1.3 & abs(log2fc) > 1.25 , 
+                                        as.character(Gene), '')),
+                          box.padding = unit('0.2', 'lines'),
+                          segment.color = 'gray',
+                          color = 'black',
+                          ylim = c(0, Inf), size = 4)
+}
+
+plot.apop.volcano(aale.de.seq)
+plot.apop.volcano(ha1em.de.seq)
+```
+
+#### Immunosuppressive Volcano Plots:
+```{r}
+supp.gene.set <- read.table('data/dendritic.immuno.suppress.gene.list.txt')
+
+plot.supp.volcano <- function(quant.file) {
+  quant.file <- subset(quant.file, Gene %in% supp.gene.set$V1)
+  ggplot(quant.file, aes(y=-log10(pval),
+                     x=log2fc,
+         color = ifelse(abs(log2fc) > 1 & pval < 0.05, 'not', 'sig'))) +
+    theme(axis.line = element_blank()) +
+  geom_point(size = 2, alpha = 0.5) +  
+  geom_rug(size = 1, alpha = 0.3) + 
+  scale_x_continuous(limits = c(-6, 6)) +
+  scale_y_continuous(limits = c(0, 300)) +
+  xlab('log2(Fold Change)') +
+  ylab('-log10(pvalue)') + 
+  geom_hline(yintercept = -log10(0.05), linetype='dotted', alpha = 0.4) +
+  geom_vline(xintercept = 0, linetype='dotted', alpha = 0.4) +
+  geom_hline(yintercept = -log10(0.05), linetype='dotted', alpha = 0.4) +
+  geom_vline(xintercept = c(-1,0,1), linetype='dotted', alpha = 0.4) + 
+  scale_color_manual(name='', guide = F, values = c('black','grey')) +
+  ggrepel::geom_text_repel(aes(label = 
+  ifelse(abs(-log10(pval)) > 1.3 & abs(log2fc) > 1.25 , 
+                                        as.character(Gene), '')),
+                          box.padding = unit('0.2', 'lines'),
+                          segment.color = 'gray',
+                          color = 'black',
+                          ylim = c(0, Inf), size = 4)
+}
+
+plot.supp.volcano(aale.de.seq)
+plot.supp.volcano(ha1em.de.seq)
+```
+
+#### Interferon Volcano Plots:
+```{r}
+plot.ifn.volcano <- function(quant.file) {
+  quant.file <- subset(quant.file, 
+                       grepl('^IFN', Gene))
+  ggplot(quant.file, aes(y=-log10(pval),
+                     x=log2fc,
+         color = ifelse(abs(log2fc) > 1 & pval < 0.05, 'not', 'sig'))) +
+    theme(axis.line = element_blank()) +
+  geom_point(size = 2, alpha = 0.5) +  
+  geom_rug(size = 1, alpha = 0.3) + 
+  scale_x_continuous(limits = c(-6, 6)) +
+  scale_y_continuous(limits = c(0, 10)) +
+  xlab('log2(Fold Change)') +
+  ylab('-log10(pvalue)') + 
+  geom_hline(yintercept = -log10(0.05), linetype='dotted', alpha = 0.4) +
+  geom_vline(xintercept = 0, linetype='dotted', alpha = 0.4) +
+  geom_hline(yintercept = -log10(0.05), linetype='dotted', alpha = 0.4) +
+  geom_vline(xintercept = c(-1,0,1), linetype='dotted', alpha = 0.4) + 
+  scale_color_manual(name='', guide = F, values = c('black','grey')) +
+  ggrepel::geom_text_repel(aes(label = 
+  ifelse(abs(-log10(pval)) > 1.3 & abs(log2fc) > 0 , 
+                                        as.character(Gene), '')),
+                          box.padding = unit('0.2', 'lines'),
+                          segment.color = 'gray',
+                          color = 'black',
+                          ylim = c(0, Inf), size = 4)
+}
+
+
+plot.ifn.volcano(aale.de.seq)
+
+```
+
+
+### ZNF targets from ChIP data (Trono *et al*):
+```{r echo=F}
+znf.target.trono <- 
+  read_csv('data/znf_element.csv')
+
+names(znf.target.trono)[1] <- 'znf'
+
+znf.target.trono.tidy <- znf.target.trono %>% 
+  gather(element, score, -znf) %>% 
+  merge(aale.de.seq, by.x = 'znf', by.y = 'Gene') %>% 
+  filter(pval < 0.05 & abs(log2fc) > 0.8 & znf %in% ZNFs) %>% 
+  separate(element, '/', into = c('clade', 'family', 'element'), fill = 'warn') 
+ 
+znf.target.trono.tidy.filtered <- 
+  znf.target.trono.tidy %>% 
+  group_by(znf) %>% 
+  filter(score > quantile(score, .95))
+```
+
+#### Generating and parsing genomic data:
+```{r}
+#clipr::write_clip(unlist(subset(aale.de.seq, pval < 0.05)$Gene))
+ucsc.column.names <- c('chr', 'start', 'stop', 'name', 'zero', 'orientation')
+de.genes.upstream <- read_tsv('data/de.genes.test.upstream.2500.bed', 
+                              col_names = ucsc.column.names)
+de.genes.downstream <- read_tsv('data/de.genes.downstream.1000.bed', 
+                              col_names = ucsc.column.names)
+de.genes.exons <- read_tsv('data/de.genes.exons.bed', 
+                              col_names = ucsc.column.names)
+de.genes.whole.gene <- read_tsv('data/de.genes.whole.gene.bed',
+                                col_names = ucsc.column.names)
+parse.ucsc.gene.names <- function(bed.file){
+  bed.file <- bed.file %>% 
+    separate(name, '_', into = c('ENST','cds','position',
+                                 'junk','chrom','start.plus.1',
+                                 'direction'))
+  return(bed.file[,c(1:4,6,12)])
+}
+parse.ucsc.gene.names.not.exons <- function(bed.file){
+  bed.file <- bed.file %>% 
+    separate(name, '_', into = c('ENST','location','len',
+                                 'chrom','start.plus.1',
+                                 'direction'))
+  return(bed.file[,c(1:5,11)])
+}
+
+de.genes.exons.parsed <- parse.ucsc.gene.names(de.genes.exons)
+de.genes.upstream.parsed <- parse.ucsc.gene.names.not.exons(de.genes.upstream)
+de.genes.downstream.parsed <- parse.ucsc.gene.names.not.exons(de.genes.downstream)
+```
+
+#### TE Differential Expression:
+```{r}
+# pulled from SalmonTE -- currently giving very questionable results
+
+te.aale.de.seq <- read_csv('data/te.kras.v.ctrl.deseq.csv') %>% 
+  filter(pvalue < 0.05)#, 
+         ! X1 %in% aale.quant$GENE)
+
+plot.te.volcano <- function(quant.file) {
+  ggplot(quant.file, 
+         aes(y=-log10(pvalue),
+         x=log2FoldChange,
+         color = clade,
+         size = log10(baseMean))) + 
+    theme(axis.line = element_blank()) +
+  geom_point(alpha = 0.7) +  
+  geom_rug(size = 1, alpha = 0.3) + 
+  scale_x_continuous(limits = c(-7.5, 7.5)) +
+  scale_y_continuous(limits = c(0, 20)) +
+  xlab('log2(Fold Change)') +
+  ylab('-log10(pvalue)') + 
+  geom_hline(yintercept = -log10(0.05), linetype='dotted', alpha = 0.4) +
+  geom_vline(xintercept = 0, linetype='dotted', alpha = 0.4) +
+  geom_hline(yintercept = -log10(0.05), linetype='dotted', alpha = 0.4) +
+  #geom_vline(xintercept = c(-1,0,1), linetype='dotted', alpha = 0.4) + 
+  #scale_color_manual(name='', guide = F, values = c('black','grey')) +
+  scale_color_manual(name = 'Clade',
+                     values = c("#E64B35FF","#4DBBD5FF",
+                                "#00A087FF","#91D1C2FF", 
+                                '#8491B4FF', "#F39B7FFF",
+                                "#3C5488FF")) #+
+  #ggrepel::geom_text_repel(aes(label = 
+  #ifelse(pvalue < 0.05 & abs(log2FoldChange) > 0.25, 
+  #                                      as.character(name), '')),
+  #                        box.padding = unit('0.4', 'lines'),
+  #                        segment.color = 'gray',
+  #segment.alpha = 0.3,
+  #                        color = 'black',
+  #                        ylim = c(0, Inf), 
+  #                        xlim = c(-Inf, -1, 1, Inf),
+  #                        size = 2)
+}
+
+aale.te.de.seq <- 
+  read.csv('data/aale.new/test/results.csv') %>% 
+  filter( pvalue < 0.05) #%>% 
+  plot.te.volcano()
+
+
+
+new.ha1em.te.de.seq <- 
+  read.csv('data/ha1em.new/test/results.csv') %>% 
+  filter(pvalue < 0.05) %>% 
+  mutate(clade = factor(clade, levels = c('CR1','ERV1',
+                                             'ERV2', 'ERV3',
+                                             'L1', 'L2', 'SINE'))) %>% 
+  plot.te.volcano()
+
+```
+
+#### Preparing Whole Gene bed for repeat masking:
+```{r}
+aale.quant.for.ucsc.merge <- aale.quant[,c(1, 5:8, 11, 13)]
+
+de.genes.exons.parsed.merged <- 
+  merge(aale.quant.for.ucsc.merge, 
+        de.genes.whole.gene, 
+        by.x = 'ENST',
+        by.y = 'name') 
+  #group_by(TX) %>% 
+  #arrange(TX, start, position) %>% 
+  #unite('tx', TX, position, sep = '_', remove = T)
+
+
+aale.de.exons <- tibble(chr = de.genes.exons.parsed.merged$chr, 
+                        start = de.genes.exons.parsed.merged$start,
+                        stop = de.genes.exons.parsed.merged$stop,
+                        TX = de.genes.exons.parsed.merged$TX,
+                        len = de.genes.exons.parsed.merged$LEN,
+                        strand = de.genes.exons.parsed.merged$orientation)
+
+write_tsv(aale.de.exons, 'data/aale.de.exons/aale.de.exons.bed', 
+          col_names = F)
+
+# bedtools intersect -a aale.de.upstream.bed -b ucsc.gencode.rmsk.intersect.gene.bed -wo -f 0.50 -s > overlap.bed #
+
+aale.de.exons.overlap <- 
+  read_tsv('data/aale.de.exons/overlap.bed',
+           col_names = F)[,c(1:4,6,10,13)] %>% 
+  filter(!grepl('-rich', X10)) %>% 
+  filter(!grepl(')n', X10))
+
+names(aale.de.exons.overlap) <- c('chr', 'start', 'stop',
+                                  'tx', 'strand', 'repeat', 'len')
+
+aale.de.exons.overlap.merge <- merge(aale.de.exons.overlap, 
+                                     de.genes.exons.parsed.merged, 
+                                     by.all = 'tx')
+
+aale.de.whole.gene.sleuth.de.seq.overlap <- 
+  merge(aale.de.exons.overlap.merge, 
+        aale.de.seq,
+        by.x = 'GENE',
+        by.y = 'Gene') 
+```
+   
+#### Whole gene GTF with lncs
+```{r}
+whole.gene.gtf <- read_tsv('data/de.aale.genes.gtf',
+                           col_names = c('chr', 'origin', 'type', 
+                                         'start', 'stop', 'zero', 
+                                         'strand', 'dot', 'gene.and.tx'))
+
+whole.gene.gtf.parsed <- 
+  whole.gene.gtf[, c(1,3,4,5,7,9)] %>% 
+  separate(gene.and.tx, ';', into = c('gene', 'tx')) %>% 
+  separate(gene, '"', into = c('g', 'gene', 'q')) %>% 
+  select(-g, -q) %>% 
+  separate(tx, '"', into = c('t', 'tx', 'q')) %>% 
+  select(-t, -q)
+
+aale.de.gtf.to.bed <- tibble(chr = whole.gene.gtf.parsed$chr, 
+                        start = whole.gene.gtf.parsed$start,
+                        stop = whole.gene.gtf.parsed$stop,
+                        tx = whole.gene.gtf.parsed$tx,
+                        len = whole.gene.gtf.parsed$type,
+                        strand = whole.gene.gtf.parsed$strand)
+
+write_tsv(aale.de.gtf.to.bed, 
+          'data/aale.de.exons/aale.de.exons.from.gtf.bed', 
+          col_names = F)
+
+aale.de.gtf.to.bed.overlap <- 
+  read_tsv('data/aale.de.exons/overlap.tsv',
+           col_names = F) %>% 
+  select(-X6, -X7, -X8, -X9, -X11, -X13) %>% 
+  filter(!grepl('-rich', X10)) %>% 
+  filter(!grepl(')n', X10))
+
+names(aale.de.gtf.to.bed.overlap) <- 
+  c('chr', 'start', 'stop', 
+    'tx', 'type', 'repeat', 'strand')
+
+aale.de.gtf.overlap.merge.quant <- 
+  merge(aale.de.gtf.to.bed.overlap,
+        aale.quant.for.ucsc.merge,
+        by.x = 'tx',
+        by.y = 'ENST') %>% 
+  merge(aale.de.seq,
+        by.x = 'GENE', 
+        by.y = 'Gene')
+  
+
+```
+
+#### TE/lncRNA Volcano:
+```{r}
+plot.te.lnc.volcano <- function(quant.file) {
+  quant.file <- subset(quant.file, GENE %in% lnc.names$V1)
+  ggplot(quant.file, aes(y=-log10(pval.y),
+                     x=log2fc.y,
+         color = ifelse(abs(log2fc.y) > 1 & pval.y < 0.05, 'not', 'sig'))) +
+    theme(axis.line = element_blank()) +
+  geom_point(size = 2, alpha = 0.5) +  
+  geom_rug(size = 1, alpha = 0.3) + 
+  scale_x_continuous(limits = c(-4, 4)) +
+  scale_y_continuous(limits = c(0, 50)) +
+  xlab('log2(Fold Change)') +
+  ylab('-log10(pvalue)') + 
+  geom_hline(yintercept = -log10(0.05), linetype='dotted', alpha = 0.4) +
+  geom_vline(xintercept = 0, linetype='dotted', alpha = 0.4) +
+  geom_hline(yintercept = -log10(0.05), linetype='dotted', alpha = 0.4) +
+  geom_vline(xintercept = c(-1,0,1), linetype='dotted', alpha = 0.4) + 
+  scale_color_manual(name='', guide = F, values = c('black','grey')) +
+  ggrepel::geom_text_repel(aes(label = 
+  ifelse(abs(-log10(pval.y)) > 1.3 & abs(log2fc.y) > 4 , 
+                                        as.character(`repeat`), '')),
+                          box.padding = unit('0.2', 'lines'),
+                          segment.color = 'gray',
+                          color = 'black',
+                          ylim = c(0, Inf), size = 4)
+} 
+
+te.lnc.aale.de.seq <- plot.te.lnc.volcano(aale.de.whole.gene.sleuth.de.seq.overlap)
+te.lnc.aale.de.seq
+
+```
+
+#### Up and Down-stream overlap processing:
+```{r}
+de.genes.upstream.parsed.merged <- 
+  de.genes.upstream.parsed %>% 
+  merge(aale.quant.for.ucsc.merge,
+        by.all = 'ENST') %>% 
+  group_by(GENE) %>% 
+  arrange(TX, start)
+
+aale.de.upstream <- tibble(chr = de.genes.upstream.parsed.merged$chr,
+                           start = de.genes.upstream.parsed.merged$start,
+                           stop = de.genes.upstream.parsed.merged$stop,
+                           tx = de.genes.upstream.parsed.merged$TX,
+                           len = de.genes.upstream.parsed.merged$LEN,
+                           strand = de.genes.upstream.parsed.merged$orientation)
+write_tsv(aale.de.upstream, 'data/aale.de.upstream/aale.de.upstream.bed', col_names = F)
+
+# bedtools intersect -a aale.de.upstream.bed -b ucsc.gencode.rmsk.intersect.gene.bed -wo -f 0.50 -s > overlap.bed #
+
+aale.de.upstream.overlaps <- 
+  read_tsv('data/aale.de.upstream/overlap.f.0.5.bed', 
+           col_names = F)[,c(1:4,6,10,13)] %>% 
+  filter(!grepl('-rich', X10)) %>% 
+  filter(!grepl(')n', X10))
+
+names(aale.de.upstream.overlaps) <- c('chr', 'start', 'stop',
+                                  'tx', 'strand', 'repeat', 'len')
+
+aale.de.upstream.overlaps.parsed.merged <- 
+  aale.de.upstream.overlaps %>% 
+  separate(`repeat`, sep = '_', into = 'repeat') %>% 
+  merge(aale.quant.for.ucsc.merge, by.x = 'tx', by.y = 'TX') %>% 
+  merge(aale.de.seq, by.x = 'GENE', by.y = 'Gene') %>% 
+  distinct(GENE, chr, start, stop, strand, `repeat`,
+           log2fc.x, pval.x, log2fc.y, pval.y)
+```
+
+#### Downstream: 
+```{r}
+de.genes.downtream.parsed.merged <- 
+  de.genes.downstream.parsed %>% 
+  merge(aale.quant.for.ucsc.merge,
+        by.all = 'ENST') %>% 
+  group_by(GENE) %>% 
+  arrange(TX, start)
+
+aale.de.downstream <- tibble(chr = de.genes.upstream.parsed.merged$chr,
+                           start = de.genes.upstream.parsed.merged$start,
+                           stop = de.genes.upstream.parsed.merged$stop,
+                           tx = de.genes.upstream.parsed.merged$TX,
+                           len = de.genes.upstream.parsed.merged$LEN,
+                           strand = de.genes.upstream.parsed.merged$orientation)
+
+write_tsv(aale.de.upstream, 'data/aale.de.downstream/aale.de.downstream.bed', col_names = F)
+
+aale.de.downstream.overlaps <- 
+  read_tsv('data/aale.de.downstream/antisense.overlap.bed', 
+           col_names = F)[,c(1:4,6,10,13)] %>% 
+  filter(!grepl('-rich', X10)) %>% 
+  filter(!grepl(')n', X10))
+
+names(aale.de.downstream.overlaps) <- c('chr', 'start', 'stop',
+                                  'tx', 'strand', 'repeat', 'len')
+
+aale.de.downstream.overlaps.parsed.merged <- 
+  aale.de.downstream.overlaps %>% 
+  separate(`repeat`, sep = '_', into = 'repeat') %>% 
+  merge(aale.quant.for.ucsc.merge, by.x = 'tx', by.y = 'TX') %>% 
+  separate(`repeat`, sep = '_', into = c('repeat','trash','trash1',
+                                         'trash2','trash3', 'trash4')) %>% 
+  select(-trash, -trash1, -trash2, -trash3, -trash4)
+
+
+
+```
+
+#### ZNF 'xmas tree' plots:
+```{r}
+znf.targets.upstream.te.de.merge <- 
+  merge(znf.target.trono.tidy.filtered, 
+        aale.de.upstream.overlaps.parsed.merged,
+        by.x = 'element',
+        by.y = 'repeat') %>% 
+  distinct(element, znf, family, score, 
+           log2fc, pval,log2fc.x, pval.x, GENE, 
+           chr, log2fc.y, pval.y) %>% 
+  filter(family %in% c('Alu','ERV1','ERVK','ERVL','L1','L2')) %>% 
+  group_by(GENE) %>% 
+  filter(score == max(score)) %>% 
+  distinct(element, znf, family, score,
+           log2fc, pval, chr, GENE, log2fc.y, pval.y)
+
+znfs.of.interest <- c('ZNF441', 'ZNF605', 'ZNF506', 'ZNF442', 'ZNF382', 'ZNF682', 'ZNF736')
+
+pos <- position_jitter(width = 0.3, seed = 2)
+
+ggplot(subset(znf.targets.upstream.te.de.merge, 
+              log2fc < -0.8 & pval.y < 0.05 & znf %in% znfs.of.interest), 
+       aes(reorder(znf, -log2fc), 
+           log2fc.y, 
+           color = family,
+           label = GENE)) + 
+  geom_jitter(alpha = 0.6, position = pos) + 
+  xlab('') +
+  ylab('log2(Fold Change)') + 
+  theme(axis.text.x = element_text(angle = 40, hjust = 1)) + 
+  scale_color_viridis_d()
+  ggrepel::geom_text_repel(aes(label = 
+  ifelse(abs(log2fc.y) > .8 & GENE %in% isg.names, 
+         as.character(paste(GENE, element)), '')),
+  box.padding = 0.5,
+  segment.color = 'grey',
+  color = 'black',
+  ylim = c(-10, 10), size = 4, position = pos) 
+
+```
+
+#### ZNF667-AS1:
+```{r}
+aale.de.whole.gene <- read_tsv('data/aale.de.whole.gene.bed',
+                               col_names = F)[,c(1:4)]
+
+names(aale.de.whole.gene) <- c('chr','start','stop','ENST')
+
+chr.19.de.whole.gene <- 
+  subset(aale.de.whole.gene, chr == 'chr19') %>% 
+  merge(aale.quant.for.ucsc.merge, by.all ='ENST') %>%
+  subset(grepl('ZNF', GENE))
+
+ggplot(chr.19.de.whole.gene, 
+       aes(start/1e6, log2fc, 
+           #color = ifelse(GENE == 'ZNF667-AS1', 'znf667-as1', 'other'))) + 
+           #color = ifelse(grepl('-AS1',GENE) , '-as1', 'znf'),
+           color = pval,
+           alpha = ifelse(pval < 0.05, 1, 0.3))) + 
+  #geom_point() + 
+  geom_jitter() + 
+  geom_rug() +
+  scale_color_viridis_c(name = 'p-value') + 
+  scale_alpha(name = '', guide =F) + 
+  scale_y_continuous(limits = c(-2.5,2.5)) +
+  geom_hline(yintercept = c(-1,0,1), 
+             linetype = 'dotted', 
+             alpha = c(0.7,0.4,0.7)) + 
+  xlab('') + 
+  theme(legend.position = 'top',
+        legend.key.width = unit(0.4, 'in'),
+        legend.key.height = unit(0.05, 'in'),
+        legend.text = element_text(size = 8)) +
+  ggrepel::geom_text_repel(aes(label = 
+  ifelse(abs(log2fc) > 0.84 , 
+                                        as.character(TX), '')),
+                          box.padding = unit('0.2', 'lines'),
+                          segment.color = 'gray',
+                          color = 'black',
+                          ylim = c(-4, 0), size = 4) + 
+  annotate('rect', 
+           xmin = c(7.25,19,36,50.5, 55),
+           xmax = c(10,24,38.5,54.5,59), 
+           ymin = -2.5, ymax = 2.5,
+           alpha = 0.1, 
+           color = 'white', 
+           fill = 'blue')
+
+de.whole.gene.merge <- 
+  aale.de.whole.gene %>% 
+  merge(aale.quant.for.ucsc.merge, by.all ='ENST') %>% 
+  subset(pval < 0.05) %>% 
+  ggplot(aes(chr, log2fc)) + 
+  geom_boxplot() + 
+  theme(axis.text.x = element_text(angle = 40, hjust = 1)) + 
+  scale_y_continuous(limits = c(-8,8))
+
+de.whole.gene.merge
+
+```
+
+### Plotting the TCGA data:
+```{r}
+
+znfs.for.figure <- c('ZFP92', 'ZNF135', 'ZNF334', 'ZNF34', 'ZNF347', 'ZNF345A', 'ZNF345C',
+                     'ZNF382', 'ZNF415', 'ZNF433', 'ZNF441', 'ZNF442', 'ZNF471', 'ZNF506',
+                     'ZNF528', 'ZNF558', 'ZNF563', 'ZNF568', 'ZNF582', 'ZNF586', 'ZNF605',
+                     'ZNF655', 'ZNF662', 'ZNF667', 'ZNF682', 'ZNF736', 'ZNF788', 'ZNF793',
+                     'ZNF814', 'ZNF83', 'ZNF880', 'ZNF90', 'ZNF10', 'ZNF133', 'ZNF665', 'ZNF699',
+                     'ZNF792')
+
+gdc.tcga.luad.phenotypes <- 
+  read_tsv('data/TCGA-LUAD.GDC_phenotype.tsv.gz')#[, c('submitter_id.samples','kras_gene_analysis_performed', 'kras_mutation_found', 'kras_mutation_result')] %>% 
+  rename(patient = 'submitter_id.samples') %>% 
+  mutate(match = str_split_fixed(patient, 
+                                 pattern = '-', 
+                                 n = 4)[,4],
+         patient.tag = str_sub(str_split_fixed(patient, 
+                                 pattern = '-', 
+                                 n = 2)[,2], 1, 
+                               7),
+         source = ifelse(match == '11A', 
+                         'TCGA-luad-normal',
+                         'TCGA-luad-tumor')) #%>% 
+  #filter(!sample %in% c('ZNF736', 'ZNF90')) 
+
+tcga.luad.phenotypes <- 
+  read_tsv('data/LUAD_clinicalMatrix.gz') %>%
+  subset(!is.na(KRAS)) %>% 
+  mutate(match = str_split_fixed(sampleID, 
+                                 pattern = '-', 
+                                 n = 4)[,4],
+         patient.tag = str_sub(str_split_fixed(sampleID, 
+                                 pattern = '-', 
+                                 n = 2)[,2], 1, 
+                               7),
+         source = ifelse(match == '11', 
+                         'TCGA-luad-normal',
+                         'TCGA-luad-tumor')) %>% 
+  select(-match, -patient.tag) 
+
+tcga.luad.norm.counts <- 
+  read_tsv('data/tcga.normalized.counts.luad.tsv.gz') %>% 
+  #subset(sample %in% znfs.for.figure) %>% 
+  subset(sample %in% ifn.signature) %>%
+  gather(sampleID, counts, -sample) %>%
+  subset(sampleID %in% tcga.luad.phenotypes$sampleID) %>% 
+  merge(tcga.luad.phenotypes, by.all = sampleID) %>% 
+  #filter(!sample %in% c('ZNF736', 'ZNF90')) %>% 
+  group_by(KRAS, sample) %>% 
+  filter(KRAS %in% c('p.G12C',
+                     'p.G12D',
+                     'p.G12V',
+                     'none')) #%>% 
+  unite(source, c('KRAS', 'source'))
+
+
+ggplot(tcga.luad.norm.counts,
+       aes(#reorder(sample, counts), 
+         source,
+           counts, 
+           color = KRAS)) + 
+  geom_boxplot(alpha = 0.5, position = 'dodge') + 
+  geom_rug(size = 0.25, alpha = 0.5, 
+           sides = 'l', outside = T,
+           position = 'jitter', length = grid::unit(0.15, 'cm')) + 
+  scale_color_colorblind(name = '') + 
+  theme(axis.line = element_blank(),
+        axis.text.x = element_text(angle = 40, hjust = 1),
+        legend.position = 'top') + 
+  geom_hline(yintercept = 
+               mean(subset(tcga.luad.norm.counts, 
+                           source == 'TCGA-luad-normal')$counts),
+             alpha = 0.4) + 
+  geom_hline(yintercept = 
+               mean(subset(tcga.luad.norm.counts, 
+                           source == 'TCGA-luad-tumor')$counts),
+             alpha = 0.4, color = '#E69F00') + 
+  coord_cartesian(clip = "off") + 
+  theme(plot.margin = margin(1, 1, 1, 1, "cm")) #+
+  facet_wrap(~source)
+
+
+gtex.norm.counts <- 
+  read_tsv('../data/TCGA-GTEx-TARGET-gene-exp-counts.deseq2-normalized.log2') 
+
+gtex.phenotypes <- 
+  read_tsv('data/GTEX_phenotype.gz') %>% 
+  subset(`_primary_site` == 'Lung')
+  #subset(`_primary_site` %in% c('Kidney', 'Lung'))
+
+gtex.norm.counts.parse <- 
+  gtex.norm.counts %>% 
+  subset(sample %in% ifn.signature) %>%
+  gather(patient, counts, -sample) %>% 
+  subset(patient %in% gtex.phenotypes$Sample) %>% 
+  #subset(patient != 'GTEX-SUCS-0626-SM-5CHQE') %>% 
+  #add_column(KRAS = 'GTEX')
+  add_column(source = 'GTEX')
+
+gtex.tcga.w.match.combined <- 
+  #rbind(tcga.luad.norm.counts[,c(2,3,5)],
+  #      gtex.norm.counts[,c(1,3,4)]) %>% 
+  gtex.norm.counts.parse[,c(1,3,4)] %>% 
+  subset(!sample %in% c('ZNF736', 'ZNF90'))
+
+ggplot(gtex.tcga.w.match.combined,
+       aes(reorder(sample, counts), 
+           counts, 
+           color = source)) + 
+  geom_boxplot(alpha = 0.5, position = 'dodge') + 
+  geom_rug(size = 0.25, alpha = 0.5, 
+           sides = 'l', outside = T,
+           position = 'jitter', length = grid::unit(0.15, 'cm')) + 
+  scale_color_colorblind(name = '') + 
+  theme(axis.line = element_blank(),
+        axis.text.x = element_text(angle = 40, hjust = 1),
+        legend.position = 'top') + 
+  geom_hline(yintercept = 
+               mean(subset(gtex.tcga.w.match.combined, 
+                           source == 'GTEX')$counts),
+             alpha = 0.4, color = 'black') + 
+  geom_hline(yintercept = 
+               mean(subset(gtex.tcga.w.match.combined, 
+                           source == 'TCGA-luad-normal')$counts),
+             alpha = 0.4, color = '#E69F00') + 
+  geom_hline(yintercept = 
+               mean(subset(gtex.tcga.w.match.combined, 
+                           source == 'TCGA-luad-tumor')$counts),
+             alpha = 0.4, color = '#56B4E9') +
+  coord_cartesian(clip = "off") + 
+  theme(plot.margin = margin(1, 1, 1, 1, "cm"))
+
+
+
+
+merged.muts.and.gtex <- rbind(tcga.luad.norm.counts[,c(2,3,4)], gtex.norm.counts[,c(1,3,4)]) %>% 
+  subset(!sample %in% c('ZNF736', 'ZNF90'))
+
+ggplot(subset(merged.muts.and.gtex, KRAS %in% c('p.G12C', 'p.G12D', 'p.G12V', 'GTEX')), 
+       aes(sample, counts, color=KRAS)) + 
+  geom_boxplot(alpha = 0.5, position = 'dodge') + 
+  geom_rug(size = 0.15, alpha = 0.5, 
+           sides = 'l', outside = TRUE,
+           position = 'jitter', length = grid::unit(0.15, 'cm')) + 
+  scale_color_colorblind(name = '') + 
+  theme(axis.line = element_blank(),
+        axis.text.x = element_text(angle = 40, hjust = 1),
+        legend.position = 'top') + 
+  geom_hline(yintercept = 
+               mean(subset(merged.muts.and.gtex, KRAS == 'GTEX')$counts),
+             alpha = 0.4) + 
+  geom_hline(yintercept = 
+               mean(subset(merged.muts.and.gtex, KRAS == 'p.G12C')$counts),
+             alpha = 0.4, color = '#E69F00') + 
+   geom_hline(yintercept = 
+               mean(subset(merged.muts.and.gtex, KRAS == 'p.G12D')$counts),
+             alpha = 0.4, color = "#56B4E9") + 
+   geom_hline(yintercept = 
+               mean(subset(merged.muts.and.gtex, KRAS == 'p.G12V')$counts),
+             alpha = 0.4, color = "#009E73") + 
+  coord_cartesian(clip = "off") + 
+  theme(plot.margin = margin(1, 1, 1, 1, "cm")) + 
+  ylab('log(Counts + 1)') + 
+  xlab('')
+
+### fxn to calculate p-val for every znf in each condtion vs. GTEX
+
+znf.t.test.df <- tibble(placehold = NA)
+
+for(znf in levels(as.factor(merged.muts.and.gtex$sample))){
+  for(snv in levels(as.factor(merged.muts.and.gtex$KRAS))){
+      if(snv %in% c('p.G12C', 'p.G12V', 'p.G12D')){
+        temp.df <- subset(merged.muts.and.gtex, sample == znf & KRAS %in% c(snv, 'GTEX'))
+        temp.p.val <- t.test(counts ~ KRAS, data = temp.df, 
+                             alternative = 'greater')$p.value
+        znf.t.test.df <- rbind(znf.t.test.df,
+                               paste(znf, 
+                                     snv, 
+                                     temp.p.val, 
+                                     ifelse(temp.p.val < 0.05, '*', 'x')))
+        
+      }
+   }
+}
+znf.t.test.df <- tibble(placehold = NA)
+
+for(znf in levels(as.factor(tcga.luad.norm.counts$sample))){
+  for(source in levels(as.factor(tcga.luad.norm.counts$source))){
+        temp.df <- subset(tcga.luad.norm.counts, sample == znf)
+        temp.p.val <- t.test(counts ~ source, data = temp.df, 
+                             alternative = 'greater')$p.value
+        znf.t.test.df <- rbind(znf.t.test.df,
+                               paste(znf, 
+                                     source, 
+                                     temp.p.val, 
+                                     ifelse(temp.p.val < 0.05, '*', 'x'), sep = ','))  
+
+        
+  }
+
+}
+znf.t.test.df <- 
+znf.t.test.df[-1,] %>% 
+separate(placehold, sep = ',', into = c('znf', 'source', 'p.val', 'sig')) %>% 
+  filter(sig == '*')
+#filter(tcga.luad.norm.counts, sample %in% znf.t.test.df$znf),
+ggplot(tcga.luad.norm.counts,
+       aes(reorder(sample, counts), 
+           counts, 
+           color = source)) + 
+  geom_boxplot(position = 'dodge') + 
+  geom_rug(size = 0.25, alpha = 0.5, 
+           sides = 'l', outside = T,
+           position = 'jitter', length = grid::unit(0.15, 'cm')) + 
+  scale_color_manual(name = '', values = c('#37b578ff',
+                                           '#440154ff')) + 
+  theme(axis.line = element_blank(),
+        axis.text.x = element_text(angle = 40, hjust = 1),
+        legend.position = 'top') + 
+  geom_hline(yintercept = 
+               mean(subset(tcga.luad.norm.counts, 
+                           source == 'TCGA-luad-normal')$counts),
+             alpha = 0.4, color = '#37b578ff') + 
+  geom_hline(yintercept = 
+               mean(subset(tcga.luad.norm.counts, 
+                           source == 'TCGA-luad-tumor')$counts),
+             alpha = 0.4, color = '#440154ff') + 
+  coord_cartesian(clip = "off") + 
+  theme(plot.margin = margin(1, 1, 1, 1, "cm")) + 
+  ylab('log(Counts + 1)') + 
+  xlab('') +
+  annotate("text",
+           x = c(1,2,3,4,5,6,7,
+                   8,9,10,11,12,13,
+                   15,16,18,19,21,22,
+                   25,30,33),
+           y = c(5,8,8,8,8,8,8,
+                 8,8,8,8.4,8.4,8.4,
+                 8.6, 8.8, 8.8, 9,9,
+                 9.5, 10, 10.5, 12.5),
+           label = c("*"), size = 6)
+```
+
+#### TOIL recompute data
+```{r}
+toil.phenotypes <- 
+  read_tsv('data/TcgaTargetGTEX_phenotype.txt') %>% 
+  select(sample, 
+         category = 'detailed_category',
+         disease = 'primary disease or tissue',
+         tissue = '_primary_site',
+         type = '_sample_type',
+         gender = '_gender',
+         study = '_study')
+
+down.c2h2.znfs <- 
+  read_csv('data/dn.c2h2.znf.names.csv') %>% 
+  filter(log2FoldChange < -2)
+
+toil.norm.counts <- 
+  read_tsv('data/TCGA-GTEx-TARGET-gene-exp-counts.deseq2-normalized.log2')
+
+#kras.epi.ifn.names <- c('IFIT1', 'OASL', 'OAS1', 'OAS2', 'IFIH1', 'DDX58'
+
+znf.ensg <- 
+  aale.quant %>% 
+  filter(GENE %in% c(down.c2h2.znfs$gene, ifn.signature)) %>% 
+  #filter(GENE %in% znfs.for.figure) %>%
+  select(ENSG, GENE) %>% 
+  distinct()
+
+znf.toil.norm.counts <- 
+  toil.norm.counts %>% 
+  filter(X1 %in% znf.ensg$ENSG) %>% 
+  merge(znf.ensg,
+        by.x = 'X1',
+        by.y = 'ENSG')
+
+znf.toil.norm.counts.tidy <- 
+  znf.toil.norm.counts %>% 
+  gather(sample, count, -X1, -GENE) %>% 
+  select(gene = 'GENE', sample, count)
+
+znf.toil.norm.counts.tidy.merge <- 
+  znf.toil.norm.counts.tidy %>% 
+  merge(toil.phenotypes,
+        by = 'sample') %>% 
+  group_by(study, gene, tissue) 
+
+tcga.toil.samples <- 
+  znf.toil.norm.counts.tidy.merge %>% 
+  filter(study == 'TCGA') %>% 
+  merge(tcga.luad.phenotypes,
+        by.x = 'sample',
+        by.y = 'sampleID') %>% 
+  mutate(KRAS = ifelse(KRAS == 'none', KRAS, 'G12')) %>% 
+  #filter(KRAS != 'none') %>%
+  mutate(type = ifelse(KRAS == 'none',
+                       paste(type, 'no KRAS', sep = '.'),
+                       type)) %>% 
+  select(-KRAS)
+  
+znf.toil.lung.kras <- 
+  znf.toil.norm.counts.tidy.merge %>% 
+  filter(study != 'TCGA',
+         study != 'TARGET') %>% 
+  bind_rows(tcga.toil.samples)
+
+toil.tcga <- 
+  znf.toil.norm.counts.tidy.merge %>% 
+  filter(study == 'TCGA') %>% 
+  bind_rows(tcga.toil.samples)
+
+filter(toil.tcga, 
+              #tissue %in% c('Lung', 'Kidney'),
+       disease != 'Lung Squamous Cell Carcinoma',
+       type %in% c('Solid Tissue Normal', 'Primary Tumor'))$type %>% table()
+###
+znf.low.samples <- 
+  znf.toil.lung.kras %>% 
+  filter(tissue %in% c('Lung'),
+         disease != 'Lung Squamous Cell Carcinoma') %>% 
+  top_frac(n = -.05, wt = count) %>% 
+  filter(type == 'Primary Tumor')
+###
+
+ggplot(filter(znf.toil.lung.kras, 
+              tissue %in% c('Lung'),
+       disease != 'Lung Squamous Cell Carcinoma',
+              type %in% c('Primary Tumor',
+                          'Solid Tissue Normal',
+                          'Primary Tumor.no KRAS',
+                          'Solid Tissue Normal.no KRAS',
+                          'Normal Tissue')),#, 
+              #gene %in% znf.t.test.df$znf),
+       #aes(reorder(gene, count), count, color = type)) + 
+       aes(reorder(type, count), count, color = type)) +
+  geom_boxplot(alpha = 0.75, position = position_dodge(width = 1))+
+  geom_sina(alpha = 0.05, position = position_dodge(width = 1))  + 
+  #scale_color_manual(name = '', values = c('#440154ff',
+  #                                         '#37b578ff')) +
+  scale_color_viridis_d() +
+  #facet_wrap(~KRAS, nrow = 1) +
+  ylab('log2(DESeqII normalized(counts + 1))') + 
+  xlab('') + 
+  theme(axis.line = element_blank(),
+        axis.text.x = element_text(angle = 40, hjust = 1),
+        legend.position = 'top')
+
+znf.toil.lung.kras %>% 
+  filter(type %in% c('Primary Tumor', 'Solid Tissue Normal'),
+         tissue == 'Lung') %>% 
+  ungroup() %>% 
+  select(gene, type, count) %>%
+  group_by(gene, type) %>%
+  summarise(avg.count = mean(count)) %>% 
+  spread('type', 'avg.count', fill = NA) %>%
+  drop_na() %>% 
+  ggplot(aes(`Primary Tumor`, `Solid Tissue Normal`)) + 
+  geom_point()
+
+
+kmeans(znf.toil.lung.kras, centers = 3)
+
+
+znf.toil.lung.kras %>% 
+  filter(tissue %in% c('Lung'),
+         study == 'TCGA',
+       disease != 'Lung Squamous Cell Carcinoma',
+       type %in% c('Primary Tumor',
+                          'Solid Tissue Normal',
+                          'Primary Tumor.no KRAS',
+                          'Solid Tissue Normal.no KRAS',
+                          'Normal Tissue')) %>% 
+  ungroup() %>% 
+  select(sample, gene, count, type) %>% 
+  mutate(set = ifelse(gene %in% liu.ifn.signature, 'ifn', 'znf')) %>% 
+  group_by(sample, set, type) %>% 
+  summarize(avg = mean(count)) %>% 
+  spread(set, avg) %>% 
+  filter(type != 'Normal Tissue') %>% 
+  gather(biotype, count, -type, -sample) %>% 
+ #separate(patient, sep = '[.]', into = c('pat', 'condition', 'rep')) %>% 
+  #mutate(score = ifn * adar) %>% 
+  ggplot(aes(biotype, count, color = type)) + 
+  geom_boxplot() + 
+  theme(legend.position = 'top',
+        axis.text.x = element_text(angle = 40, hjust = 1))
+
+znf.toil.lung.kras %>% 
+  filter(tissue %in% c('Lung'),
+         study == 'TCGA',
+       disease != 'Lung Squamous Cell Carcinoma',
+       type %in% c('Primary Tumor',
+                          'Solid Tissue Normal',
+                          'Primary Tumor.no KRAS',
+                          'Solid Tissue Normal.no KRAS',
+                          'Normal Tissue')) %>% 
+  ungroup() %>% 
+  select(sample, gene, count, type) %>% 
+  mutate(set = ifelse(gene %in% liu.ifn.signature, 'ifn', 'znf')) %>% 
+  group_by(sample, set, type) %>% 
+  summarize(avg = mean(count)) %>% 
+  spread(set, avg) %>% 
+  filter(type != 'Normal Tissue') %>% 
+ #separate(patient, sep = '[.]', into = c('pat', 'condition', 'rep')) %>% 
+  #mutate(score = ifn * adar) %>% 
+  ggplot(aes(ifn, znf, color = type)) + 
+  #geom_boxplot() + 
+  geom_point() + 
+  facet_row(~type) +
+  stat_regline_equation() +
+  theme(legend.position = 'top',
+        axis.text.x = element_text(angle = 40, hjust = 1))
+```
+
+```{r}
+znf.toil.lung.kras.compare <- 
+  filter(toil.tcga, 
+              tissue %in% c('Lung'),
+       disease != 'Lung Squamous Cell Carcinoma',
+              type %in% c('Solid Tissue Normal', 'Primary Tumor'))
+
+znf.t.test.df <- tibble(placehold = NA)
+
+for(znf in levels(as.factor(znf.toil.lung.kras.compare$gene))){
+      temp.df <- subset(znf.toil.lung.kras.compare, gene == znf)
+      temp.p.val <- t.test(count ~ type, data = temp.df, 
+                           alternative = 'less')$p.value
+      znf.t.test.df <- rbind(znf.t.test.df,
+                             paste(znf, 
+                                   temp.p.val, 
+                                   ifelse(temp.p.val < 0.05, 
+                                          '*', 'x'), sep = ','))  
+      
+}
+
+
+# first
+znf.t.test.df.greater <- 
+  znf.t.test.df[-1,] %>% 
+  separate(placehold, sep = ',', 
+           into = c('znf', 'p.val.greater', 'greater'))
+# second
+znf.t.test.df.less <- 
+  znf.t.test.df[-1,] %>% 
+  separate(placehold, sep = ',', 
+           into = c('znf', 'p.val.less', 'less'))
+
+
+merge(znf.t.test.df.greater,
+        znf.t.test.df.less,
+        by = 'znf') %>% 
+  gt()
+
+```
+
+### Genome and Biotype Representation:
+Loading in aggregated salmon psuedo-alignments 
+```{r}
+aale.quant.aggregate <- read_csv('data/aale.quant.data.aggregate.csv')[, -1] %>% 
+  separate(Name, sep = '\\|', into = c('ENST', 'ENSG', 'OTTG', 'OTTT', 'TX', 'GENE', 'LEN', 'TYPE'))
+
+ha1em.quant.aggregate <- read_csv('data/ha1em.quant.data.aggregate.csv')[, -1] %>% 
+  separate(Name, sep = '\\|', into = c('ENST', 'ENSG', 'OTTG', 'OTTT', 'TX', 'GENE', 'LEN', 'TYPE'))
+
+chr.order <- c('1', '2', '3', 
+               '4', '5', '6', 
+               '7', '8', '9',
+               '10', '11', '12', 
+               '13', '14', '15', 
+               '16', '17',
+               '18', '19', '20', 
+               '21', '22', 'X', 'Y')
+```
+#### Generate total gencode reference
+```{r}
+# need a reference with everything in it so I can calculate biotype proportions
+whole.gene.gtf <- read_tsv('data/whole.genome.gtf',
+                           col_names = c('chr', 'origin', 'type', 
+                                         'start', 'stop', 'zero', 
+                                         'strand', 'dot', 'gene.and.tx'))
+# parse the gtf into more of a minimal .bed 
+whole.gene.gtf.parsed <- 
+  whole.gene.gtf[, c(1,3,4,5,7,9)] %>% 
+  separate(gene.and.tx, ';', into = c('gene', 'tx')) %>% 
+  separate(gene, '"', into = c('g', 'gene', 'q')) %>% 
+  select(-g, -q) %>% 
+  separate(tx, '"', into = c('t', 'tx', 'q')) %>% 
+  select(-t, -q, -gene) 
+
+
+gencode.29.reference <- 
+  read_tsv('data/gencode.29.annotations/gencode.v29.annotation.gtf',
+             col_names = F, progress = F) %>% 
+  filter(X3 == 'transcript') %>% 
+  separate(X9, ';', into = c('gene', 'tx')) %>% 
+  select(-gene) %>% 
+  separate(tx, '"', into = c('trash', 'tx')) %>% 
+  select(-X2, -X3, -X6, -X8, -trash)
+
+gencode.29.fasta.headers <- 
+  read.delim('data/gencode.29.annotations/gencode.v29.transcripts.headers.fa',
+             sep = '|', header = F) %>% 
+  select(-V2, -V3, -V4, -V9)
+
+gencode.tx.reference <- 
+  merge(gencode.29.reference,
+        gencode.29.fasta.headers,
+        by.x = 'tx',
+        by.y = 'V1')
+
+
+```
+#### Build comparison data sets
+
+##### aale.quant outputs
+```{r}
+
+clean.up.refs <- function(ref){
+  ref[is.na(ref)] <- 0
+  ref <- 
+    ref %>% 
+    mutate(mapped = 
+             ifelse(degrees_free == 1,
+                          'yes','no'),
+           significant = 
+             ifelse(pval < 0.05 & mapped == 'yes', 
+                    'true', 'false'))
+  return(ref)
+}
+
+aale.quant.v.gencode.ref <- 
+  merge(aale.quant,
+        gencode.tx.reference,
+        by.x = 'ENST',
+        by.y = 'tx',
+        all = T) %>% 
+  clean.up.refs()
+
+ha1em.quant.v.gencode.ref <- 
+  merge(ha1em.quant,
+        gencode.tx.reference,
+        by.x = 'ENST',
+        by.y = 'tx',
+        all = T) %>% 
+  clean.up.refs()
+
+```
+
+##### aggregate data output
+```{r}
+aale.quant.aggregate.collapse <-
+  #aale.quant.aggregate %>% 
+  ha1em.quant.aggregate %>% 
+  group_by(ENST, condition) %>% 
+  summarize(NumReads = sum(NumReads))
+
+aale.quant.agg.w.ref <- 
+  merge(aale.quant.aggregate.collapse,
+        gencode.tx.reference,
+        by.x = 'ENST',
+        by.y = 'tx')
+
+aale.quant.agg.w.ref <- 
+  aale.quant.agg.w.ref %>% 
+  add_column(binary_read = ifelse(aale.quant.agg.w.ref$NumReads > 5, 'yes', 'no'))
+
+top_biotypes <- c('antisense',
+                  'lincRNA',
+                  'processed_transcript',
+                  'protein_coding',
+                  'retained_intron')
+
+aale.quant.agg.w.ref.fold.change <- 
+  merge(aale.quant.agg.w.ref,
+        #aale.quant.v.gencode.ref[, c(1,11,13)],
+        ha1em.quant.v.gencode.ref[, c(1,11,13)],
+        by = 'ENST')
+
+aale.quant.agg.w.ref.fold.change$biotype <- 
+  ifelse(aale.quant.agg.w.ref.fold.change$V8 %in% top_biotypes, 
+         as.character(aale.quant.agg.w.ref.fold.change$V8), 
+         'other')
+```
+#### visualize differences in reads/chromosome across condition 
+```{r}
+ggplot(aale.quant.agg.w.ref) + 
+  geom_bar(aes(X1, 
+               fill = binary_read),
+           position = position_stack()) +
+  theme(axis.text.x = element_text(angle = 40, hjust = 1)) + 
+  xlab('') + ylab('') +
+  scale_x_discrete(limits = chr.order) +
+  scale_fill_colorblind() + 
+  geom_hline(yintercept = seq(0,15000,5000), color = 'white') + 
+  facet_wrap(~condition, nrow = 2)
+
+aale.condition.sum <- aale.quant.agg.w.ref %>% 
+  group_by(X1, condition) %>% 
+  summarise(sum.num = sum(NumReads)) %>% 
+  spread(condition, sum.num)
+
+aale.condition.sum$ctrl <- aale.condition.sum$ctrl/sum(aale.condition.sum$ctrl)
+aale.condition.sum$kras <- aale.condition.sum$kras/sum(aale.condition.sum$kras)
+
+
+ggplot(aale.condition.sum) + 
+  geom_point(aes(kras, reorder(X1, -ctrl)), color = 'red', size = 3) +
+  geom_point(aes(ctrl, reorder(X1, -ctrl)), color = 'blue', size = 3) +
+  geom_segment(aes(x=kras, xend=ctrl, y=X1, yend=X1)) +
+  #scale_y_discrete(limits = chr.order) + 
+  ylab('') +
+  xlab('Proportion of Total Counts')
+```
+#### chromosomal change jitter plot
+```{r}
+lnc.rna.types <- c('lincRNA', 'antisense', 'processed_transcript')
+
+aale.quant.agg.w.ref.fold.change$biotype <- 
+  ifelse(aale.quant.agg.w.ref.fold.change$V8 %in% lnc.rna.types, 'lncRNA',
+         aale.quant.agg.w.ref.fold.change$biotype)
+
+aale.quant.agg.w.ref.fold.change <- 
+  aale.quant.agg.w.ref.fold.change %>% 
+  select(-condition, -NumReads, -binary_read) %>% 
+  distinct()
+
+aale.quant.agg.w.ref.fold.change$X1 <- 
+  gsub('^.{0,3}',"",aale.quant.agg.w.ref.fold.change$X1)
+```
+#### log2fc within biotypes across chromosomes
+```{r}
+aale.quant.agg.w.ref.fold.change$biotype <- 
+  gsub('_',
+       '-',
+       aale.quant.agg.w.ref.fold.change$biotype)
+
+
+ggplot(subset(aale.quant.agg.w.ref.fold.change, 
+              abs(log2fc) > 0.025 & biotype != 'other'),
+       aes(X1, log2fc, label = V5)) +
+    geom_jitter(aes(color = pval,
+                  shape = ifelse(pval < 0.05, 
+                                 'significant', 'not significant'),
+                  alpha = ifelse(pval < 0.05, 
+                                 'significant', 'not significant')),
+                size = 0.25) + 
+  scale_shape(name = '') + 
+  scale_alpha_discrete(name = '',
+                       range = c(0.25, 1)) +
+  scale_color_viridis_c(limits = c(1e-25, 0.25),
+                        name = 'p-value',
+                        breaks = c(0, 0.05, 0.10,0.15,0.20,0.25)) +
+  guides(color = guide_colorbar(nbin = 100, 
+                                barwidth = 8, 
+                                barheight = 0.5)) + 
+  scale_x_discrete(limits = chr.order) + 
+  scale_y_continuous(limits = c(-7.5, 7.5)) + 
+  xlab('chromosome') + 
+  ylab('log2(Fold Change)') + 
+  geom_hline(yintercept = 0, color = 'white') + 
+  theme(legend.position = 'bottom') + 
+  guides(shape = guide_legend(override.aes = list(size=2))) + 
+  facet_wrap(~biotype, nrow = 1) 
+
+names(aale.quant.agg.w.ref.fold.change) <- 
+  c('enst', 'chromosome', 'start.position', 'end.position', 
+    'strand', 'transcript.id', 'gene', 'len', 'bad.biotype', 
+    'log2FoldChange', 'p-value', 'biotype') 
+
+gene.summary.table <- 
+  aale.quant.agg.w.ref.fold.change %>% 
+  select(-bad.biotype) %>% 
+  group_by(gene) %>% 
+  filter(`p-value` < 0.05 & abs(log2FoldChange) > 1) %>%
+  filter(biotype == 'lncRNA') %>% 
+  mutate(genome = 'hg38')
+
+WriteXLS::WriteXLS(gene.summary.table, 'lnc.summary.table.hg38.xlsx')
+
+
+  mutate(log2FoldChange = sum(log2FoldChange),
+         `p-value` = mean(`p-value`)) %>% 
+  distinct(chromosome, start.position, end.position, strand, gene, log2FoldChange, `p-value`, biotype)
+
+
+count.changing.genes <- 
+  aale.quant.agg.w.ref.fold.change %>% 
+  filter(pval < 0.05 & log2fc != 0) %>% 
+  mutate(direction = ifelse(log2fc > 0, 'up', 'down')) %>% 
+  distinct(V5, .keep_all = T) %>% 
+  group_by(biotype, direction) %>% 
+  mutate(freq = n()) %>% 
+  distinct(biotype, direction, freq)
+```
+
+#### log2fc correlation
+```{r}
+aale.ha1em.overlap.merge <- 
+  merge(filter(aale.quant.v.gencode.ref, TX != 0)[, c(5,8,11,13)],
+        filter(ha1em.quant.v.gencode.ref, TX != 0)[, c(5,8,11,13)],
+        by = c('TX', 'TYPE')) %>% 
+  rename(log2fc.x = 'aale.change',
+         log2fc.y = 'ha1em.change',
+         pval.x = 'aale.pvalue',
+         pval.y = 'ha1em.pvalue') %>% 
+  filter(aale.pvalue < 0.05 & ha1em.pvalue < 0.05) %>% 
+  filter(aale.change/ha1em.change > 0) %>% 
+  mutate(direction = ifelse(aale.change > 0 & ha1em.change > 0,
+                            'up', 'down')) %>% 
+  group_by(TYPE, direction) %>% 
+  summarise(freq = n())
+
+```
+
+#### te overlap with gencode biotypes
+```{r}
+# need a reference with everything in it so I can calculate biotype proportions
+every.gene.gtf <- read_tsv('data/whole.genome.gtf',
+                           col_names = c('chr', 'origin', 'type', 
+                                         'start', 'stop', 'zero', 
+                                         'strand', 'dot', 'gene.and.tx'))
+
+# parse the gtf into more of a minimal .bed 
+every.gene.gtf.parsed <- 
+  every.gene.gtf[, c(1,3,4,5,7,9)] %>% 
+  separate(gene.and.tx, ';', into = c('gene', 'tx')) %>% 
+  separate(gene, '"', into = c('g', 'gene', 'q')) %>% 
+  select(-g, -q) %>% 
+  separate(tx, '"', into = c('t', 'tx', 'q')) %>% 
+  select(-t, -q, -gene)
+
+every.gene.gtf.parsed.named <- 
+  every.gene.gtf.parsed %>% 
+  merge(gencode.tx.reference,
+        by = 'tx') %>% 
+  select(chr, type, start, stop, strand, V5) %>% 
+  rename(tx = V5)
+
+# make new subsets where every tx from every biotype is present
+
+protein.rna.types <- c('protein_coding')
+retained.rna.types <- c('retained_intron')
+
+make.quant.names <- function(ref, type.names){
+  name.df <-  
+    subset(ref, V8 %in% type.names) %>% 
+    select(X1:X5, V7, X7,V5)
+  quant.df <- 
+    subset(every.gene.gtf.parsed.named,
+           tx %in% name.df$V5) %>% 
+    select(chr, start, stop, tx, type, strand)
+  return(quant.df)
+}
+
+aale.quant.lncrna <- 
+  make.quant.names(aale.quant.v.gencode.ref,
+                   lnc.rna.types)
+
+aale.quant.protein <- 
+  make.quant.names(aale.quant.v.gencode.ref,
+                   protein.rna.types)
+
+aale.quant.retained <- 
+  make.quant.names(aale.quant.v.gencode.ref,
+                   retained.rna.types)
+
+ha1em.quant.lncrna <- 
+  make.quant.names(ha1em.quant.v.gencode.ref,
+                   lnc.rna.types)
+
+ha1em.quant.protein <- 
+  make.quant.names(ha1em.quant.v.gencode.ref,
+                   protein.rna.types)
+
+ha1em.quant.retained <- 
+  make.quant.names(ha1em.quant.v.gencode.ref,
+                   retained.rna.types)
+
+```
+
+#### export for bedtools overlapping
+```{r}
+write_tsv(aale.quant.lncrna, 'data/aale.gencode.biotypes/aale.quant.lncrna.bed', 
+          col_names = F)
+write_tsv(aale.quant.protein, 'data/aale.gencode.biotypes/aale.quant.protein.bed', 
+          col_names = F)
+write_tsv(aale.quant.retained, 'data/aale.gencode.biotypes/aale.quant.retained.bed', 
+          col_names = F)
+write_tsv(ha1em.quant.lncrna, 'data/ha1em.gencode.biotypes/ha1em.quant.lncrna.bed', 
+          col_names = F)
+write_tsv(ha1em.quant.protein, 'data/ha1em.gencode.biotypes/ha1em.quant.lncrna.bed', 
+          col_names = F)
+write_tsv(ha1em.quant.retained, 'data/ha1em.gencode.biotypes/ha1em.quant.lncrna.bed', 
+          col_names = F)
+
+#bedtools intersect -a aale.quant.retained.bed -b all.ucsc.rmsk.genes.bed -wao -s > retained.overlap.bed
+```
+
+#### import bedtools overlapped files
+```{r echo=FALSE}
+overlap.col.names <- c('chr', 'tx.start', 'tx.end', 'tx', 'tx.type', 
+                       'strand', 'chr.2', 'te.start', 'te.end',
+                       'te', 'te.len', 'te.strand', 'te.tx.ol')
+
+te.ref <- 
+  read_csv('data/te.family.clade.csv', 
+           col_names = c('te', 'family', 'clade')) %>% 
+  distinct()
+  
+overlap.import.fxn <- function(ol.file, ref){
+  overlap.output <- 
+    read_tsv(ol.file, col_names = overlap.col.names) %>% 
+    select(-chr.2, -te.strand) %>% 
+    filter(!grepl('-rich', te)) %>% 
+    filter(!grepl(')n', te)) %>% 
+    merge(ref[,c(28,11,32,33,13)],
+          by.x = 'tx',
+          by.y = 'V5') %>% 
+    distinct(tx.start, te.start, te.end, .keep_all = T) %>% 
+    mutate(overlap = ifelse(te.len == -1, F, T)) %>% 
+    mutate(exon.len = tx.end - tx.start) %>% 
+    mutate(prop.ol = ifelse(overlap == 0, 0, te.tx.ol/exon.len)) %>% 
+    merge(te.ref, by = 'te', all = T) %>% 
+    mutate(overlap = ifelse(prop.ol > 0.1, T, F))
+  
+  return(overlap.output)
+}
+
+aale.lncrna.overlap <- 
+  overlap.import.fxn('data/aale.gencode.biotypes/lncrna.overlap.bed', 
+                     aale.quant.v.gencode.ref) %>% 
+  mutate(biotype = 'lncRNA') %>% 
+  mutate(origin = 'AALE')
+
+
+aale.protein.overlap <- 
+  overlap.import.fxn('data/aale.gencode.biotypes/protein.overlap.bed', 
+                     aale.quant.v.gencode.ref) %>% 
+  mutate(biotype = 'protein-coding') %>% 
+  mutate(origin = 'AALE')
+
+
+aale.retained.overlap <- 
+  overlap.import.fxn('data/aale.gencode.biotypes/retained.overlap.bed', 
+                     aale.quant.v.gencode.ref) %>% 
+  mutate(biotype = 'retained-intron') %>% 
+  mutate(origin = 'AALE')
+
+ha1em.lncrna.overlap <- 
+  overlap.import.fxn('data/ha1em.gencode.biotypes/lncrna.overlap.bed',
+                     ha1em.quant.v.gencode.ref) %>% 
+  mutate(biotype = 'lncRNA')  %>% 
+  mutate(origin = 'HA1EM')
+
+
+ha1em.protein.overlap <- 
+  overlap.import.fxn('data/ha1em.gencode.biotypes/protein.overlap.bed',
+                     ha1em.quant.v.gencode.ref) %>% 
+  mutate(biotype = 'protein-coding')  %>% 
+  mutate(origin = 'HA1EM')
+
+
+ha1em.retained.overlap <- 
+  overlap.import.fxn('data/ha1em.gencode.biotypes/retained.overlap.bed', 
+                     ha1em.quant.v.gencode.ref) %>% 
+  mutate(biotype = 'retained-intron')  %>% 
+  mutate(origin = 'HA1EM')
+```
+#### looking at mapped overlapping exons
+```{r}
+overlap.bind <- 
+  rbind(aale.lncrna.overlap,
+        aale.protein.overlap,
+        aale.retained.overlap,
+        ha1em.lncrna.overlap,
+        ha1em.protein.overlap,
+        ha1em.retained.overlap) %>% 
+  filter(!is.na(family),
+         !is.na(mapped),
+         !is.na(overlap),
+         mapped != 'no')%>% 
+  mutate(change = ifelse(abs(log2fc) < 1,
+         'unchanged',
+         ifelse(log2fc > 1,
+         'upregulated',
+         'downregulated')))
+
+prop.fxn <- function(tru1, tru2, tot1, tot2){
+  res <- prop.test(c(tru1, tru2),
+                   c(tot1, tot2),
+          p = NULL,
+          alternative = 'two.sided',
+          correct = T)
+  return(res$p.value)
+}
+
+overlap.bind.prop <- 
+  as_tibble(table(overlap.bind[, c('biotype', 'origin','overlap', 'change')])) %>% 
+  spread(overlap,n) %>% 
+  mutate(total = `TRUE` + `FALSE`,
+         `TRUE` = `TRUE`/total,
+         `FALSE` = `FALSE`/total) %>%
+  select(-total) %>% 
+  gather(overlap, proportion, -biotype, -origin, -change)
+
+overlap.proportion.matrix <- 
+  as_tibble(table(overlap.bind[, c('biotype', 'origin','overlap', 'change')])) %>% 
+  spread(overlap,n) %>% 
+  mutate(total = `TRUE` + `FALSE`)
+
+ggplot(overlap.bind.prop,
+       aes(x = change,
+           y = proportion,
+           fill = overlap)) + 
+  geom_col() + 
+  scale_fill_viridis_d(direction = -1) + 
+  geom_hline(yintercept = seq(0,1,0.25), 
+             color = 'white') + 
+  facet_wrap(~origin) + 
+  theme(legend.position = 'bottom',
+        axis.text.x = element_text(angle = 40, hjust = 1))
+```
+
+```{r}
+ggplot(overlap.bind,
+       aes(clade,
+           fill = family)) + 
+  geom_bar() + 
+  facet_wrap(~origin + change,
+             scales = 'free') + 
+  scale_color_viridis_d()
+
+overlap.bind.filter <- 
+  overlap.bind %>%
+  filter(overlap == T) %>% 
+  group_by(family) %>% 
+  mutate(freq = n()) %>% 
+  ungroup() %>% 
+  filter(freq > 200) %>% 
+  select(-freq)
+
+
+overlap.clade.prop <- 
+  as_tibble(table(overlap.bind.filter[, c('biotype', 'origin', 'change', 'clade')])) %>% 
+  spread(clade, n) %>% 
+  mutate(total = DNA + LINE + LTR + SINE,
+         DNA = DNA/total,
+         LINE = LINE/total,
+         LTR = LTR/total,
+         SINE = SINE/total) %>%
+  select(-total) %>% 
+  gather(clade, proportion, -biotype, -origin, -change)
+overlap.family.prop <- 
+  as_tibble(table(overlap.bind.filter[, c('biotype', 'origin', 'change', 'family')])) %>% 
+  group_by(biotype, origin, change) %>% 
+  mutate(freq = sum(n)) %>% 
+  mutate(proportion = n/freq)
+
+overlap.alu.prop <- 
+  as_tibble(table(filter(overlap.bind.filter,
+                       grepl('^Alu', te))[, c('biotype', 'origin', 'change', 'te')])) %>% 
+  group_by(biotype, origin, change) %>% 
+  mutate(freq = sum(n)) %>% 
+  mutate(proportion = n/freq) %>% 
+  mutate(te = ifelse(proportion < 0.10, 'other', te))
+
+ggplot(filter(overlap.clade.prop),
+       aes(biotype,
+           proportion,
+           fill = clade)) + 
+  geom_col() +
+  facet_wrap(~origin + change) + 
+  scale_fill_viridis_d(name = '') + 
+  xlab('') +
+  theme(legend.position = 'bottom') + 
+  guides(fill = guide_legend(override.aes = list(size = 5))) + 
+  geom_hline(yintercept = seq(0, 1, 0.25), color = 'white')
+
+ggplot(filter(overlap.family.prop),
+       aes(biotype,
+           proportion,
+           fill = family)) + 
+  geom_col() +
+  facet_wrap(~origin + change) + 
+  scale_fill_aaas() + 
+  theme(legend.position = 'bottom') + 
+  guides(fill = guide_legend(override.aes = list(size = 5))) +
+  
+
+ggplot(filter(overlap.alu.prop),
+       aes(biotype,
+           proportion,
+           fill = te)) + 
+  geom_col() +
+  facet_wrap(~origin + change) + 
+  scale_fill_calc() + 
+  theme(legend.position = 'bottom') + 
+  guides(fill = guide_legend(override.aes = list(size = 5)))
+```
+
+#### process
+```{r}
+process.overlap.te.family <- 
+  function(biotype.overlap){
+    biotype.sums <- 
+      as.data.frame(table(biotype.overlap[,c('family', 'biotype')])) %>% 
+      filter(Freq > 5) %>% 
+      mutate(relative.freq = Freq / sum(Freq))
+    
+    return(biotype.sums)
+  }
+
+lncrna.overlap.family.quant <- process.overlap.te.family(ha1em.lncrna.overlap)
+protein.overlap.family.quant <- process.overlap.te.family(ha1em.protein.overlap)
+#retained.overlap.family.quant <- process.overlap.te.family(aal.eretained.overlap)
+
+biotype.overlap.bind <- rbind(lncrna.overlap.family.quant, 
+                              protein.overlap.family.quant)
+
+biotype.overlap.bind$family <- 
+  ifelse(biotype.overlap.bind$relative.freq > 0.05, 
+         as.character(biotype.overlap.bind$family),
+         'other')
+```
+#### visualize
+```{r}
+plot.overlap.te.family <- 
+  function(biotype.overlap){
+    ggplot(biotype.overlap,
+           aes(x='',
+               y=relative.freq,
+               color = family,
+               fill = family)) + 
+      geom_bar(stat = 'identity',
+               position = 'stack') + 
+      theme(axis.text.x = element_blank(),
+            axis.ticks.x = element_blank(),
+            axis.ticks.y = element_blank()) + 
+      facet_wrap(~biotype, nrow = 1) + 
+      coord_polar('y', start = 0) + 
+      xlab('') + 
+      ylab('') + 
+      scale_fill_viridis_d() + 
+      scale_color_viridis_d()
+}
+
+plot.overlap.te.family(biotype.overlap.bind)
+```
+### FGSEA
+```{r}
+
+ifn.signature <- c("DDX58", "IFIH1", "IFNL1", "IRF9", "IFI27", "OAS2", "IFIT3", "IFIT1", 
+                   "OASL", "ISG15", "OAS3", "RSAD2", "MX1", "OAS1", "IFI44", "CH25H", "IFIT2", 
+                   "ISG20", "RNASEL", "IFI6", "HERC5", "HERC6", "GBP3", "GBP1", "IRF1", "ISG15")
+
+liu.ifn.signature <- c('ADAR', 'DDX60', 'HERC6', 'IRF7', 'OASL', 'PSM2', 'STAT2', 'TRIM25', 'BST2', 'DHX58', 'IFI35',
+                       'ISG15', 'OGFR', 'RSAD2', 'TDRD7', 'UBE2L6', 'CASP1', 'EIF2AK2', 'IFIH1', 'ISG20', 'PARP12',
+                       'RTP4', 'TRAFD1', 'USP18', 'CMPK2', 'EPSTI1', 'IFIT2', 'MX1', 'PARP14', 'SAMD9L', 'TRIM14',
+                       'CXCL10', 'GBP4', 'IFIT3', 'NMI', 'PNPT1', 'SP110', 'TRIM21')
+
+irds.gene.set <- c('ALDH3A1', 'BST2', 'CA2', 
+                'CCNA1', 'CD59', 'CXCL1',
+                'DAZ1', 'DCN', 'FLJ20035',
+                'FLJ38348', 'G1P2', 'G1P3',
+                'GALC', 'HERC6', 'HLA-B',
+                'HLA-G', 'HSD17B1', 'IFI27',
+                'IFI35', 'IFI44', 'IFI44L',
+                'IFIT1', 'IFIT3', 'IFITM1',
+                'IGF2', 'IRF7', 'LAMP3', 
+                'LGALS3BP', 'LY6E', 'MCL1', 
+                'MX1', 'MX2', 'OAS1', 'OAS3',
+                'OASL', 'PLSCR1', 'RAP2C', 
+                'ROBO1', 'SERPINB2', 'SH3YL1', 
+                'SLC6A15', 'STAT1', 'THBS1', 
+                'TIMP3', 'TncRNA', 'TRIM14', 
+                'USP18', 'ZNF273')
+
+ifn.signature <- 
+  ifn.signature[ifn.signature %in% filter(aale.de.seq, log2fc >= 1)$Gene]
+ifn.signature
+
+
+aale.de.seq.rank <- 
+  aale.de.seq %>% 
+  #ha1em.de.seq %>% 
+  mutate(rank = log2fc, #sin(log2fc) * -log10(padj),
+         rank = as.double(rank),
+         Gene = as.character(Gene)) %>% 
+  select(Gene, rank) %>%
+  drop_na() %>% 
+  #filter(rank != Inf, rank != -Inf) %>% 
+  arrange(-rank) 
+
+aale.rnk <- aale.de.seq.rank$rank
+aale.rnk <- setNames(aale.de.seq.rank$rank, aale.de.seq.rank$Gene)
+
+gs.list <- c('DER_IFN_ALPHA_RESPONSE_UP', 
+             'DER_IFN_GAMMA_RESPONSE_UP', 
+             'REACTOME_RIG_I_MDA5_MEDIATED_INDUCTION_OF_IFN_ALPHA_BETA_PATHWAYS',
+             'DER_IFN_BETA_RESPONSE_UP', 
+             'HALLMARK_INTERFERON_GAMMA_RESPONSE', 
+             'HALLMARK_INTERFERON_ALPHA_RESPONSE',
+             'MINN_IRDS_SIGNATURE',
+             'KRAS_ISG_SIGNATURE', 
+             'LIU_ISG_SIGNATURE')
+
+lookup <- tibble(gs.name = gs.list,
+                 re.name = c('DER_IFN_ALPHA_UP',
+                             'DER_IFN_GAMMA_UP',
+                             'RIG_I_MDA_5_INDUCTION',
+                             'DER_IFN_BETA_UP',
+                             'HALLMARK_IFNG_RESPONSE',
+                             'HALLMARK_IFNA_RESPONSE',
+                             'MINN_IRDS_SIGNATURE',
+                             'KRAS_ISG_SIGNATURE',
+                             'LIU_ISG_SIGNATURE'))
+
+msig.df.h.ifng <- 
+  msigdbr(species = 'Homo sapiens', category = 'H') %>% 
+  subset(grepl('_GAMMA_RESPONSE', gs_name)) %>% 
+  mutate(gs_name = 'HALLMARK_IFNG_RESPONSE') %>% 
+  select(gene_symbol, gs_name)
+
+msig.df.h.ifna <- 
+  msigdbr(species = 'Homo sapiens', category = 'H') %>% 
+  subset(grepl('_ALPHA_RESPONSE', gs_name)) %>% 
+  mutate(gs_name = 'HALLMARK_IFNA_RESPONSE') %>% 
+  select(gene_symbol, gs_name)
+
+
+irds.gs <- tibble(gene_symbol = irds.gene.set,
+                  gs_name = 'MINN_IRDS_SIGNATURE')
+
+kras.epi.ifn <- tibble(gene_symbol = ifn.signature,
+                       gs_name = 'KRAS_ISG_SIGNATURE')
+
+liu.isg.sig <- tibble(gene_symbol = liu.ifn.signature,
+                       gs_name = 'LIU_ISG_SIGNATURE')
+
+msig.df <- 
+  msigdbr(species = 'Homo sapiens') %>% 
+  select(gene_symbol, gs_name) %>% 
+  rbind(irds.gs) %>% 
+  rbind(msig.df.h.ifng) %>% 
+  rbind(msig.df.h.ifna) %>% 
+  rbind(kras.epi.ifn) %>% 
+  rbind(liu.isg.sig) %>% 
+  filter(gs_name %in% gs.list) %>% 
+  merge(lookup,
+        by.x = 'gs_name',
+        by.y = 'gs.name') %>% 
+  split(x = .$gene_symbol, f = .$re.name)
+
+KRAS.SIGNALING.UP <- 
+  msigdbr(species = 'Homo sapiens') %>% 
+  filter(gs_name == 'HALLMARK_KRAS_SIGNALING_UP')  %>% 
+  select(gene_symbol, gs_name) 
+
+
+hallmark.msig.df <- 
+  msigdbr(species = 'Homo sapiens', category = 'H') %>% 
+  select(gene_symbol, gs_name) #%>% 
+  split(x = .$gene_symbol, f = .$gs_name)
+
+meta.msig.df <- 
+  msigdbr(species = 'Homo sapiens') %>% 
+  select(gene_symbol, gs_name) %>% 
+  rbind(irds.gs) %>% 
+  #rbind(msig.df.h.ifng) %>% 
+  rbind(kras.epi.ifn) %>% 
+  rbind(liu.isg.sig) %>% 
+  filter(gs_name %in% gs.list) %>% 
+  merge(lookup,
+        by.x = 'gs_name',
+        by.y = 'gs.name') %>%
+  select(gs_name = 're.name', gene_symbol) %>% 
+  rbind(hallmark.msig.df) %>% 
+  #rbind(all.msig.df) %>% 
+  split(x = .$gene_symbol, f = .$gs_name)
+
+
+ # all.msig.df <- 
+ #   msigdbr(species = 'Homo sapiens') %>% 
+ #   select(gene_symbol, gs_name) #%>% 
+ #   split(x = .$gene_symbol, f = .$gs_name)
+# 
+# names(msig.df)
+# 
+# msig.freq <- 
+#   msig.df %>% 
+#   group_by(gs_name) %>% 
+#   mutate(freq = n()) %>% 
+#   distinct(gs_name, freq)
+# 
+# msig.df.overlap.raw <- as.data.frame(crossprod(table(msig.df)))
+# msig.df.overlap.raw[4,4] <- 400
+# 
+# msig.df.overlap <- 
+#   #as.data.frame(crossprod(table(msig.df))) %>% 
+#   msig.df.overlap.raw %>% 
+#   rownames_to_column('overlap') %>% 
+#   as_tibble() %>% 
+#   gather(gs, count, -overlap) %>% 
+#   merge(msig.freq,
+#         by.x = 'gs',
+#         by.y = 'gs_name') %>% 
+#   mutate(prop = count/freq) #%>% 
+#   ggplot(aes(overlap, gs, fill = prop)) +
+#   geom_tile() + 
+#   scale_fill_viridis_c(option = 'D') + 
+#   theme(axis.text.x = element_text(angle = 40, hjust = 1))
+# 
+# msig.df.overlap
+
+  
+fgseaRes <- fgsea(pathways = meta.msig.df, 
+                  stats = aale.rnk,
+                  nperm = 100000)
+
+fgseaRes
+
+gsea.df <- as_tibble(fgseaRes) %>% filter(padj < 0.01)
+
+gsea.df$pathway <- gsub('_', ' ', gsea.df$pathway) 
+
+#ha1e.gsea.df <- gsea.df
+
+gsea.df %>% 
+  mutate(condition = 'AALE') %>% 
+  rbind(ha1e.gsea.df %>% mutate(condition = 'HA1E')) %>% 
+  filter(!pathway %in% c('HALLMARK INTERFERON ALPHA RESPONSE', 
+                         'HALLMARK INTERFERON GAMMA RESPONSE',
+                         'HALLMARK EPITHELIAL MESENCHYMAL TRANSITION',
+                         'HALLMARK INFLAMMATORY RESPONSE',
+                         'HALLMARK MYC TARGETS V1',
+                         'HALLMARK E2F TARGETS',
+                         'DER IFN GAMMA UP',
+                         'MINN IRDS SIGNATURE',
+                         'DER IFN BETA UP',
+                         'DER IFN ALPHA UP')) %>% 
+  ggplot(aes(as.factor(reorder(pathway, NES)), NES, fill = condition)) + 
+  geom_bar(stat = 'identity', position = 'dodge', width = rel(0.5)) +
+  xlab('') +
+  scale_fill_manual('cell line', values = c(viridis(3)[1], viridis(3)[2])) +
+  geom_hline(yintercept = seq(-3,3), alpha = 1, size = 0.5, color = 'white') +
+  geom_vline(xintercept = 4.5, alpha = 0.3, size = 0.25, color = c('black')) +
+  geom_hline(yintercept = 0, alpha = 0.3, size = 0.5, color = 'black') +
+  theme(legend.position = 'right',
+        axis.text.x = element_text(angle = 40, hjust = 1)) + 
+  scale_x_continuous(position = 'top')
+
+ggsave('figures/fig.1/gsea.bar.2.5x3.5.pdf', height = 2.5, width = 3.5, units = 'in')
+
+filt.gsea.df %>% 
+  mutate(condition = 'AALE') %>% 
+  rbind(ha1e.gsea.df %>% filter(pathway %in% filt.gsea.df$pathway) %>% mutate(condition = 'HA1E')) %>% 
+  #filter(abs(NES) > 1 & padj <= 0.06) %>%
+  select(NES, condition, pathway) %>% 
+  spread(condition, NES) %>% 
+  ggplot(aes(AALE, HA1E , color = pathway)) + 
+  geom_point(size = 5) + 
+  ylab('') +
+  scale_fill_viridis_d() +
+  #scale_color_manual(values = c(viridis(3))) +
+  geom_vline(xintercept = 0, linetype = 'dashed') + 
+  geom_vline(xintercept = c(-1,1), alpha = 1, size = 1.5, color = 'white') +
+  theme(legend.position = 'right') + 
+  scale_x_continuous(limits = c(-2,2))
+
+
+ggplot(subset(gsea.df, abs(NES) > 1 & padj <= 0.06), 
+       aes(NES, reorder(pathway, -NES), color = log(padj))) + 
+  geom_point(size = 3) + 
+  geom_segment(aes(x=0, xend=NES, y=pathway, yend=pathway)) + 
+  ylab('') +
+  scale_color_viridis_c() +
+  geom_vline(xintercept = 0, linetype = 'dashed') + 
+  theme(legend.position = 'right') + 
+  scale_x_continuous(limits = c(-2,2))
+
+
+sum(fgseaRes[, padj < 0.01])
+head(fgseaRes[order(pval), ], 1)$pathway
+msig.df[[head(fgseaRes[order(pval), ], 1)$pathway]]
+
+plotEnrichment(msig.df[[head(fgseaRes[order(pval), ], 1)$pathway]],
+               aale.rnk) + 
+  labs(title=head(fgseaRes[order(pval), ], 1)$pathway)
+
+topPathwaysUp <- fgseaRes[ES > 0][head(order(pval), n=10), pathway]
+topPathwaysDown <- fgseaRes[ES < 0][head(order(pval), n=10), pathway]
+topPathways <- c(topPathwaysUp, rev(topPathwaysDown))
+
+plotGseaTable(msig.df[topPathways],
+              aale.rnk,
+              fgseaRes,
+              gseaParam = 0.5)
+
+collapsedPathways <- collapsePathways(fgseaRes[order(pval)], 
+                                      msig.df, aale.rnk)
+mainPathways <- fgseaRes[pathway %in% collapsedPathways$mainPathways][
+                         order(-NES), pathway]
+
+
+
+plotGseaTable(msig.df[mainPathways], aale.rnk, fgseaRes, gseaParam = 0.5)
+
+```
+##### Gene Set Venn:
+```{r}
+library(VennDiagram)
+library(pheatmap)
+library(ggvenn)
+library(ggVennDiagram)
+
+ifn.11 <- c(
+'DDX58',
+'IFNL1',
+'IRF9',
+'OAS2',
+'CH25H',
+'RNASEL',
+'IFI6',
+'HERC5',
+'GBP3',
+'GBP1',
+'IRF1')
+
+gene.set.list <-  list(
+    `KRAS ISG` = c(kras.epi.ifn$gene_symbol %>% unlist()) , 
+    `LIU ISG` = c(liu.isg.sig$gene_symbol %>% unlist()) , 
+    `H-IFNA` = c(msig.df.h.ifna$gene_symbol %>% unlist()),
+    `H-IFNG` = c(msig.df.h.ifng$gene_symbol %>% unlist()))
+
+ggVennDiagram(gene.set.list) + scale_fill_viridis_c()
+  
+ggsave('figures/fig.1/gsea.venn.3.5x3.5.pdf', height = 3.5, width = 3.5, units = 'in')
+
+
+aale.norm.counts <- 
+  read_csv('data/aale.normalized.counts') %>% 
+  rename(X1 = 'gene')
+
+aale.norm.counts %>% 
+  filter(gene %in% ifn.11) %>% 
+  gather(patient, count, -gene) %>%
+  mutate(count = log2(count + 1)) %>% 
+  mutate(count = scale(count)) %>% 
+  spread(patient, count) %>% 
+  column_to_rownames('gene') %>% 
+  pheatmap(color = viridis(16))
+
+kras.epi.ifn %>% 
+  merge(liu.isg.sig, by = 'gene_symbol') %>% 
+  merge(irds.gs, by = 'gene_symbol') %>%
+  merge(msig.df.h.ifna, by = 'gene_symbol') %>%
+  merge(msig.df.h.ifng, by = 'gene_symbol')
+
+kras.epi.ifn %>% 
+  filter(! gene_symbol %in% c(liu.isg.sig$gene_symbol,
+                            irds.gs$gene_symbol))
+KRAS.SIGNALING.UP %>% 
+  #filter(gene_symbol %in% msig.df.h.ifng$gene_symbol) %>% 
+  filter(gene_symbol %in% aale.de.seq$Gene) %>% 
+  select(gene_symbol) %>% 
+  print(n=63)
+
+temp.vd <- venn.diagram(
+  x = list(
+    KRAS.SIGNALING.UP$gene_symbol %>% unlist(), 
+    #liu.isg.sig$gene_symbol %>%  unlist()
+    aale.de.seq$Gene %>% unlist(), 
+    msig.df.h.ifna$gene_symbol %>% unlist(),
+    msig.df.h.ifng$gene_symbol %>% unlist()),
+  category.names = c('KRAS-up','AALE','IFNA','IFNG'),
+  filename = NULL,
+  output = TRUE,
+  col = c(viridis(4)),
+  imagetype = 'pdf',
+  height = unit(1.5, 'in') ,
+  width = unit(1.5, 'in') ,
+  resolution = 300,
+  compression = "lzw",
+  lwd = 1,
+  fill = c(alpha(viridis(5)[1],0.3), alpha(viridis(5)[2],0.3), alpha(viridis(5)[3],0.3), alpha(viridis(5)[4],0.3)), 
+  fontfamily = "Helvetica",
+  scaled = T,
+  cat.just = list(c(0,0),c(1,-1),c(0,1),c(0,0))
+          #cat.cex = 2,
+          #cat.default.pos = "outer",
+          #cat.pos = c(-27, 27, 135),
+          #cat.dist = c(0.055, 0.055, 0.085),
+          #cat.fontfamily = "sans",
+          #cat.col = viridis(5),
+          #rotation = 1
+        )
+grid.draw(temp.vd)
+
+temp.vd <- venn.diagram(
+  x = list(
+    #kras.epi.ifn$gene_symbol %>% unlist(), 
+    #liu.isg.sig$gene_symbol %>%  unlist()
+    aale.de.seq$Gene %>% unlist(), 
+    msig.df.h.ifna$gene_symbol %>% unlist(),
+    msig.df.h.ifng$gene_symbol %>% unlist()),
+  category.names = c('AALE','IFNA','IFNG'),
+  filename = NULL,
+  output = TRUE,
+  col = c(viridis(3)),
+  imagetype = 'pdf',
+  height = unit(1.5, 'in') ,
+  width = unit(1.5, 'in') ,
+  resolution = 300,
+  compression = "lzw",
+  lwd = 1,
+  fill = c(alpha(viridis(5)[1],0.3), alpha(viridis(5)[2],0.3), alpha(viridis(5)[4],0.3)), 
+  fontfamily = "Helvetica",
+  scaled = T,
+  cat.just = list(c(0,0),c(1,-1),c(0,1))
+          #cat.cex = 2,
+          #cat.default.pos = "outer",
+          #cat.pos = c(-27, 27, 135),
+          #cat.dist = c(0.055, 0.055, 0.085),
+          #cat.fontfamily = "sans",
+          #cat.col = viridis(5),
+          #rotation = 1
+        )
+grid.draw(temp.vd)
+
+
+temp.vd <- venn.diagram(
+  x = list(
+    kras.epi.ifn$gene_symbol %>% unlist() , 
+    liu.isg.sig$gene_symbol %>% unlist() , 
+    irds.gs$gene_symbol %>% unlist()),
+  category.names = c("AALE ISG SIGNATURE" , 
+                     "LIU ISG SIGNATURE" ,
+                     "MINN IRDS SIGNATURE"),
+  filename = NULL,
+  output = TRUE,
+  col = c(viridis(3)),
+  imagetype = 'pdf',
+  height = unit(3.5, 'in') ,
+  width = unit(3.5, 'in') ,
+  resolution = 300,
+  compression = "lzw",
+  lwd = 1,
+  fill = c(alpha(viridis(3)[1],0.3), alpha(viridis(3)[2],0.3), alpha(viridis(3)[3],0.3)), 
+  fontfamily = "Helvetica",
+  scaled = T,
+  cat.just = list(c(0.5,0),c(1,0),c(0,0))
+          #cat.cex = 2,
+          #cat.default.pos = "outer",
+          #cat.pos = c(-27, 27, 135),
+          #cat.dist = c(0.055, 0.055, 0.085),
+          #cat.fontfamily = "sans",
+          #cat.col = viridis(5),
+          #rotation = 1
+        )
+
+temp.vd <- venn.diagram(
+  x = list(
+    kras.epi.ifn$gene_symbol %>% unlist() , 
+    liu.isg.sig$gene_symbol %>% unlist() , 
+    irds.gs$gene_symbol %>% unlist(),
+    msig.df.h.ifng$gene_symbol %>% unlist()),
+  # category.names = c("AALE ISG SIGNATURE" , 
+  #                    "LIU ISG SIGNATURE" ,
+  #                    "MINN IRDS SIGNATURE",
+  #                    'HALLMARK IFNG RESPONSE'),
+  category.names = c('','','',''),
+  filename = NULL,
+  output = TRUE,
+  col = c(viridis(4)),
+  imagetype = 'pdf',
+  height = unit(3.5, 'in') ,
+  width = unit(3.5, 'in') ,
+  resolution = 300,
+  compression = "lzw",
+  lwd = 1,
+  fill = c(alpha(viridis(4)[1],0.3), alpha(viridis(4)[2],0.3), alpha(viridis(4)[3],0.3), alpha(viridis(4)[4],0.3)), 
+  fontfamily = "Helvetica",
+  scaled = T,
+  cat.just = list(c(0.5,0),c(0.5,0),c(0,0),c(0,0))
+          #cat.cex = 2,
+          #cat.default.pos = "outer",
+          #cat.pos = c(-27, 27, 135),
+          #cat.dist = c(0.055, 0.055, 0.085),
+          #cat.fontfamily = "sans",
+          #cat.col = viridis(5),
+          #rotation = 1
+        )
+
+grid.draw(temp.vd)
+
+library(grDevices)
+
+pdf(file="gsea.venn.1.5x1.5.pdf")
+dev.off()
+```
+
+### CTG
+```{r}
+# cell.Titer <- read.csv('~/Thesis/Projects/KRAS.AALE/AALE.figures/cellTiter.csv', 
+#                       header = FALSE)
+cell.Titer <- read.csv('../data/other/cellTiter.csv', 
+                      header = FALSE)
+colnames(cell.Titer) <- c('background', 'si', '1','2','3','4','5','6','7','8','9')
+kras.v.kras <- t.test(as.numeric(cell.Titer[1, 3:11]),  as.numeric(cell.Titer[2, 3:11]))$p.value
+nc.v.nc <- t.test(as.numeric(cell.Titer[3, 3:11]),  as.numeric(cell.Titer[4, 3:11]))$p.value
+rig.v.rig <- t.test(as.numeric(cell.Titer[5, 3:11]),  as.numeric(cell.Titer[6, 3:11]))$p.value
+mda.v.mda <- t.test(as.numeric(cell.Titer[7, 3:11]),  as.numeric(cell.Titer[8, 3:11]))$p.value
+cell.Titer['M1'] <- rowMeans(cell.Titer[, 3:5])
+cell.Titer['M2'] <- rowMeans(cell.Titer[, 6:8])
+cell.Titer['M3'] <- rowMeans(cell.Titer[, 9:11])
+
+cell.Titer['mean'] <- rowMeans(cell.Titer[, 12:14])
+cell.Titer['sd'] <- apply(cell.Titer[, 12:14],1,sd)
+
+
+
+annoDF <- data.frame(background=c('CTL_pBABE','KRAS_AALE'),
+                     start=c('siCTRL', 'siKRAS', 'siMDA5', 'siRIG-I'),
+                     end=c('siCTRL', 'siKRAS', 'siMDA5', 'siRIG-I'),
+                     y=c(5.135, 2.5, 4.11, 4.385),
+                     label=c('***','***','***', '***'))
+anno2 <- data.frame(background='KRAS_AALE', start=c('siCTRL', 'siCTRL', 'siCTRL'),
+                     end=c('siKRAS', 'siMDA5', 'siRIG-I'),
+                     y=c(5.6, 6.1 ,6.6),
+                     label=c('***','***','***'))
+cell.Titer <- subset(cell.Titer, background == 'KRAS_AALE')
+levels(cell.Titer$si) <- c('siKRAS','siCTRL','siRIG-I', 'siMDA5')
+cell.Titer[1,2] = 'siKRAS'
+cell.Titer[2,2] = 'siCTRL'
+cell.Titer[3,2] = 'siRIG-I'
+cell.Titer[4,2] = 'siMDA5'
+
+titerPlot <- ggplot(cell.Titer) + 
+  geom_bar(aes(x=si, y=mean/1e+06, ymin = mean/1e+06 - sd/1e+06, 
+               ymax = mean/1e+06 + sd/1e+06, fill=si), 
+           stat = 'identity', color='#B0000000', width = .5) + 
+  ylab('Relative Luminescence') + xlab('') +
+  scale_x_discrete(limits=c('siCTRL','siKRAS', 'siMDA5', 'siRIG-I'),expand = c(.1,0))+ 
+  geom_errorbar(aes(x=si, y=mean/1e+06, ymin = mean/1e+06 - sd/1e+06, 
+               ymax = mean/1e+06 + sd/1e+06),
+                position = position_dodge(), width = .3, color='black', size=.75) +
+  geom_signif(data=anno2, 
+              aes(xmin = start, xmax = end, annotations=label, y_position = y), 
+              textsize = rel(2.5), color = 'black',
+              tip_length = c(.1,.1), manual = TRUE) +
+  scale_y_continuous(limits=c(0,7.25), expand = c(0,0)) +
+  #scale_fill_manual(guide=F, values = c("#440154ff", "#31668dff",
+  #                                      "#37b578ff", "#fde725ff")) + 
+  scale_fill_viridis_d(option = 'magma', guide = F) +
+  geom_hline(yintercept = seq(0,4,1), color = 'white')
+
+
+cell.Titer <- read_csv('../data/other/wet.lab/cellTiter.csv', skip = 1, 
+                       col_names = c('background', 'si', '1','2','3','4','5','6','7','8','9'))
+cell.Titer['M1'] <- rowMeans(cell.Titer[, 3:5])
+cell.Titer['M2'] <- rowMeans(cell.Titer[, 6:8])
+cell.Titer['M3'] <- rowMeans(cell.Titer[, 9:11])
+
+cell.Titer %>% 
+  filter(background == 'KRAS_AALE') %>% 
+  select(si, M1, M2, M3) %>%
+  column_to_rownames('si') %>% 
+  t() %>% 
+  as.tibble() %>% 
+  rename(siKRAS = 'KRAS',
+         siCTRL = 'NC.1',
+         `siRIG-I` = 'RIG-I',
+         siMDA5 = 'MDA5') %>% 
+  gather(target, Rel.Luminescence) %>%
+  mutate(Rel.Luminescence = Rel.Luminescence/1e06) %>% 
+  ggplot(aes(target, Rel.Luminescence)) + 
+  geom_point(size = rel(0.5)) + 
+  geom_boxplot(size = rel(0.5)) + 
+  geom_signif(comparisons =  list(c('siCTRL','siKRAS'),
+                                  c('siCTRL', 'siMDA5'),
+                                  c('siCTRL', 'siRIG-I')),
+                                   test = 't.test', step_increase = 0.075, 
+              size = rel(0.25), inherit.aes = T, textsize = rel(2)) + 
+  # ggsignif::geom_signif(comparisons = list(c('siCTRL','siKRAS')), 
+  #                       test = 't.test', vjust = 0) +
+  # ggsignif::geom_signif(comparisons = list(c('siCTRL', 'siMDA5')), 
+  #                       test = 't.test', vjust = 1, ) +
+  # ggsignif::geom_signif(comparisons = list(c('siCTRL', 'siRIG-I')), 
+  #                       test = 't.test', vjust = 0.30) +
+  scale_x_discrete(limits=c('siCTRL','siKRAS', 'siMDA5', 'siRIG-I')) + 
+  xlab('')
+                         
+
+
+ggplot(cell.Titer, aes(x=si, y=mean/1e+06, ymin = mean/1e+06 - sd/1e+06, 
+               ymax = mean/1e+06 + sd/1e+06, fill=si)) + 
+  geom_boxplot() 
+
+
+
+titerPlot
+ggsave('../figures/fig.1/ctg.2.5x2.5.pdf', height = 3, width = 3, units = 'in')
+
+```
+
+### TE Sleuth
+```{r}
+te.ref <- 
+  read_csv('data/te.family.clade.csv', 
+           col_names = c('te', 'family', 'clade')) %>% 
+  distinct()
+
+te.clades.of.interest <-  c('LTR', 'DNA', 'LINE', 'SINE')
+te.families.of.interest <- c('Alu','hAT-Charlie','ERV1','ERVK','ERVL','L1','L2','LTR','MIR')
+
+ha1em.de.seq.te <- 
+  read.csv('data/new.salmon.te/ha1em.kras.vs.ctrl.deSeq.csv') %>% 
+    mutate(read.type = ifelse(X %in% gencode.29.fasta.headers$V6,
+                              'gencode','rmsk')) %>% 
+  merge(te.ref,
+        by.x = 'X',
+        by.y = 'te')
+names(ha1em.de.seq.te)[1:6] <- c('Gene', 'baseMean', 'log2fc', 'lfcse', 'pval', 'padj')
+
+aale.de.seq.te <- 
+  read.csv('data/new.salmon.te/aale.kras.vs.ctrl.deSeq.csv') %>% 
+  filter(! X %in% gencode.29.fasta.headers$V6) %>% 
+  merge(te.ref,
+        by.x = 'X',
+        by.y = 'te')
+names(aale.de.seq.te)[1:6] <- c('Gene', 'baseMean', 'log2fc', 'lfcse', 'pval', 'padj')
+
+  aale.de.seq.te %>% 
+  mutate(clade = ifelse(clade %in% te.clades.of.interest, 
+                         clade,
+                         'other')) %>% 
+    drop_na() %>% 
+  filter(clade %in% te.clades.of.interest) %>% 
+  ggplot(aes(log2fc, 
+             -log10(padj), 
+             color = clade,
+             size = baseMean,
+             label = Gene)) + 
+  geom_jitter(alpha = 0.6) + 
+  geom_rug(alpha = 0.4, size = 1) + 
+  scale_x_continuous(limits = c(-6,6)) +
+  scale_color_viridis_d(direction = -1) + 
+    ggrepel::geom_text_repel(aes(label =
+    ifelse(-log10(pval) > 1.3,as.character(Gene), '')),
+                          box.padding = unit('0.2', 'lines'),
+                          segment.color = 'gray',
+                          color = 'black',
+                          ylim = c(1.3, Inf), size = 4)
+
+plot.te.de.volcano <- function(quant.file) {
+  ggplot(quant.file, aes(y=-log10(pval),
+                     x=log2fc,
+         color = ifelse(abs(log2fc) > 1 & pval < 0.05, 'not', 'sig'))) +
+    theme(axis.line = element_blank()) +
+  geom_point(size = 2, alpha = 0.5) + 
+    geom_rug(size = 1, alpha = 0.3) + 
+  scale_x_continuous(limits = c(-13, 13)) +
+  scale_y_continuous(limits = c(0, 350)) +
+  xlab('log2(Fold Change)') +
+  ylab('-log10(pvalue)') + 
+  geom_hline(yintercept = -log10(0.05), linetype='dotted', alpha = 0.4) +
+  geom_vline(xintercept = 0, linetype='dotted', alpha = 0.4) +
+  geom_hline(yintercept = -log10(0.05), linetype='dotted', alpha = 0.4) +
+  geom_vline(xintercept = c(-1,0,1), linetype='dotted', alpha = 0.4) + 
+  scale_color_manual(name='', guide = F, values = c('black','grey')) + 
+    ggrepel::geom_text_repel(aes(label =
+    ifelse(abs(-log10(pval)) > 1.3 & abs(log2fc) > 2.5, 
+                                        as.character(Gene), '')),
+                          box.padding = unit('0.2', 'lines'),
+                          segment.color = 'gray',
+                          color = 'black',
+                          ylim = c(1.3, Inf), size = 4) 
+}
+
+te.ha1em.de.seq <- plot.te.de.volcano(ha1em.de.seq.te)
+te.aale.de.seq <- plot.te.de.volcano(aale.de.seq.te)
+
+
+aale.sleuth.names <- 
+  read_csv('data/new.salmon.te/aale.quant.data.log2fc.csv')[,-1] %>% 
+  mutate(read.type = ifelse(grepl('^ENST', Name),
+                            'gencode', 'rmsk'))
+ha1em.sleuth.names <- 
+  read_csv('data/new.salmon.te/ha1em.quant.data.log2fc.csv')[,-1] %>% 
+  mutate(read.type = ifelse(grepl('^ENST', Name),
+                            'gencode', 'rmsk'))
+  
+aale.te.sleuth <- 
+  read_csv('data/new.salmon.te/aale.quant.data.log2fc.csv')[,-1] %>% 
+  mutate(read.type = ifelse(grepl('^ENST', Name),
+                            'gencode', 'rmsk')) %>% 
+  filter(read.type == 'rmsk',
+         ! Name %in% ha1em.sleuth.names$Name) %>% 
+  separate(Name, sep = '::', into = c('Name', 'location')) %>% 
+  merge(te.ref,
+        by.x = 'Name',
+        by.y = 'te') %>% 
+  mutate(family = ifelse(family %in% te.families.of.interest, family, 'other'))
+
+        
+        
+        
+ha1em.te.sleuth <- 
+  read_csv('data/new.salmon.te/ha1em.quant.data.log2fc.csv')[,-1] %>% 
+  mutate(read.type = ifelse(grepl('^ENST', Name),
+                            'gencode', 'rmsk')) %>% 
+  filter(read.type == 'rmsk',
+         ! Name %in% aale.sleuth.names$Name) #%>% 
+  separate(Name, sep = '::', into = c('Name', 'location')) %>% 
+  merge(te.ref,
+        by.x = 'Name',
+        by.y = 'te') %>% 
+  mutate(family = ifelse(family %in% te.families.of.interest, family, 'other'))
+  #filter(grepl('^MER', Name))
+
+
+  
+
+read_csv('data/new.salmon.te/ha1em.quant.data.log2fc.csv')[,-1] %>% 
+  mutate(read.type = ifelse(grepl('^ENST', Name),
+                            'gencode', 'rmsk')) %>% 
+  separate(Name, sep = '::', into = c('Name', 'location')) %>%
+  filter(read.type == 'rmsk') %>% 
+  merge(te.ref,
+        by.x = 'Name',
+        by.y = 'te') %>% 
+  pivot_longer(cols = c('ctrl','kras'), names_to = c('condition')) %>% 
+  group_by(condition) %>% 
+  mutate(condition.total = sum(value)) %>% 
+  group_by(Name, condition) %>% 
+  mutate(total.counts = sum(value)) %>% 
+  select(Name, condition, family, total.counts, condition.total) %>% 
+  mutate(family = ifelse(family %in% te.families.of.interest, family, 'other')) %>%
+  distinct() %>% 
+  group_by(family, condition) %>% 
+  summarise(proportional.counts = sum(total.counts/condition.total)) %>% 
+  ggplot(aes(x = '', proportional.counts, fill = family)) + 
+      geom_bar(stat = 'identity',
+               position = 'stack') + 
+      scale_fill_viridis_d() + 
+      scale_color_viridis_d() +
+      theme(axis.text.x = element_blank(),
+            axis.ticks.x = element_blank(),
+            axis.ticks.y = element_blank()) + 
+      facet_wrap(~condition, nrow = 1) + 
+      #coord_polar('y', start = 0) + 
+      xlab('') + 
+
+  
+
+  
+
+ha1em.te.sleuth <- 
+  read_csv('data/new.salmon.te/ha1em.quant.data.log2fc.csv')[,-1] %>% 
+ mutate(read.type = ifelse(grepl('^ENST', Name),
+                            'gencode', 'rmsk')) %>% 
+  separate(Name, sep = '::', into = c('Name', 'location')) %>%
+  pivot_longer(cols = c('ctrl','kras'), names_to = c('condition')) %>% 
+  group_by(read.type, condition) %>% 
+  summarise(total.reads = sum(value))
+  filter(tpm.avg > 1, 
+         pval < 0.05) %>% 
+  #filter(pval < 0.05,
+  #       tpm.total > 3) %>%
+  group_by(Name) %>% 
+  summarise(log2fc = mean(log2fc),
+            pval = mean(pval),
+            ctrl = sum(ctrl),
+            kras = sum(kras))
+
+ggplot(ha1em.te.sleuth, aes(y=-log10(pval),
+                     x=log2fc,
+                     #color = family, 
+                     size = kras)) +
+    theme(axis.line = element_blank()) + 
+  geom_point(alpha = 0.5) + 
+    geom_rug(size = 1, alpha = 0.3) + 
+  scale_x_continuous(limits = c(-6, 6)) +
+  scale_y_continuous(limits = c(0, 6)) +
+  xlab('log2(Fold Change)') +
+  ylab('-log10(pvalue)') + 
+  geom_hline(yintercept = -log10(0.05), linetype='dotted', alpha = 0.4) +
+  geom_vline(xintercept = 0, linetype='dotted', alpha = 0.4) +
+  geom_hline(yintercept = -log10(0.05), linetype='dotted', alpha = 0.4) +
+  geom_vline(xintercept = c(-1,0,1), linetype='dotted', alpha = 0.4) + 
+  scale_color_viridis_d() + 
+  scale_size_continuous(name = 'counts', breaks = c(0,200,400,600)) +
+  ggrepel::geom_text_repel(aes(label = 
+  ifelse(pval < 0.05 & abs(log2fc) >= 1.0 , 
+                                        as.character(Name), '')),
+                          box.padding = unit('0.2', 'lines'),
+                          segment.color = 'gray',
+                          color = 'black',
+                          ylim = c(1.3, Inf), size = 4) 
+```
+

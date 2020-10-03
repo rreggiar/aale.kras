@@ -1,0 +1,28 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1584842230330.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "0",
+    "id" : "2862F355",
+    "lastKnownWriteTime" : 1584842363,
+    "last_content_update" : 1584842363548,
+    "path" : "~/thesis/projects/aale.kras/notebooks/aale.2020.atac.seq.analysis.Rmd",
+    "project_path" : "aale.2020.atac.seq.analysis.Rmd",
+    "properties" : {
+        "chunk_output_type" : "console",
+        "cursorPosition" : "920,0",
+        "disableDependencyDiscovery" : "1",
+        "scrollLine" : "868",
+        "tempName" : "Untitled2"
+    },
+    "read_only" : false,
+    "read_only_alternatives" : [
+    ],
+    "relative_order" : 3,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_markdown"
+}

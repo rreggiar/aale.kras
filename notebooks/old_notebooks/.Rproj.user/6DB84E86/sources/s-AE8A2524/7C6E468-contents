@@ -1,0 +1,220 @@
+---
+title: "TF Enrichment Plot"
+author: Roman Reggiardo
+date: "`r format(Sys.time(), '%B %e, %Y')`"
+fontsize: 12pt
+output: html_notebook
+
+---
+
+###As seen in [Park *et al*](http://science.sciencemag.org/content/362/6410/91):
+
+![Fig 1, F: TF Enrichment from Park *et al*](/Users/romanreggiardo/Desktop/AALE\ Figures/TF_enrich.jpg.png)
+
+They were able to rank the the TF based on P-value and fill by cell type.  
+
+* X axis: Position in ranking
+* Y axis: actual rank value
+
+
+I think that we can:  
+
+* Rank by p-value
+* Fill by log2FoldChange
+
+
+### Load in MEME TF and log2FoldChange data:
+Going to proof of concept with upregulated coding genes  
+
+```{r}
+library(tidyverse)
+# keep only tf, gene, pvalue, score, etc
+p_up_fimo <- read.delim('~/SeqAnalysis/memeIO/cNeut_fimo_out/fimo.txt')[, c(2,3,7,8,9)]
+# sort by score
+p_up_fimo <- p_up_fimo[with(p_up_fimo, order(score, decreasing = T)), ]
+# get rid of duplicates
+p_up_fimo <- unique(p_up_fimo)
+# rank
+p_up_fimo$rank <- min_rank(-p_up_fimo$score)
+# too many hits
+filt_p_up_fimo <- p_up_fimo[, c(1,3,4,5)]
+# ignore target genes and look at TFs
+filt_p_up_fimo <- unique(filt_p_up_fimo)
+filt_p_up_fimo <- subset(filt_p_up_fimo, p.value < 0.05)
+# look at avg score per TF
+filt_p_up_fimo <- 
+  filt_p_up_fimo %>%
+  group_by(motif_alt_id) %>%
+  summarise(mean(score))
+# rank again
+filt_p_up_fimo$rank <- min_rank(-filt_p_up_fimo$`mean(score)`)
+
+```
+
+### Visualize
+
+```{r}
+
+allDE <- 
+  read.delim('~/Desktop/Thesis/Projects/KRAS AALEs/DE lincs/allDE_CtrlVSStable.txt')[, c(1,3)]
+
+filt_p_up_fimo <- merge(filt_p_up_fimo, allDE, by.x = 'motif_alt_id', by.y = 'X.')
+
+upTFplot <- ggplot(filt_p_up_fimo, aes(rank, `mean(score)`, 
+             label = motif_alt_id)) + 
+  geom_point(aes(color=log2FoldChange)) +
+  theme(text = element_text(size=20, family = "sans"),
+      legend.title = element_text(size = 20),
+      axis.text.x = element_text(color = 'black',
+                                 size = 15, face = 'bold'),
+      axis.text.y = element_text(color = 'black', 
+                                 size=15, face = 'bold'),
+      panel.background = element_rect(fill ='white'),
+      axis.line.x = element_line(size=1),
+      axis.line.y = element_line(size=1),
+      strip.background = element_blank(),
+      strip.text = element_text(face = 'bold', 
+                                size = 5, hjust=0.95),
+      legend.position='right',
+      legend.key = element_blank(),
+      axis.ticks.y = element_blank(), 
+      axis.title.y = element_text(face='bold'),
+      axis.ticks.x = element_line()) + 
+  ylab('Score') + xlab('Rank') + 
+  ggrepel::geom_text_repel(
+    aes(label = ifelse(rank <= 7, 
+                       as.character(motif_alt_id), '')),
+                           hjust = -1,
+                           direction = 'y') + 
+  scale_color_gsea()
+upTFplot
+```
+
+## I've run Homer on all of the different classes of genes we have. Time to try this same analysis on that data.
+
+```{r}
+up_coding_homer <- read.delim('~/SeqAnalysis/Homer/upCoding/knownResults.txt') %>% 
+  subset(P.value < 0.05)
+dn_coding_homer <- read.delim('~/SeqAnalysis/Homer/dnCoding/knownResults.txt')%>% 
+  subset(P.value < 0.05)
+isg_homer <- read.delim('~/SeqAnalysis/Homer/isg/knownResults.txt')%>% 
+  subset(P.value < 0.05)
+upLnc_homer <- read.delim('~/SeqAnalysis/Homer/upLNC/knownResults.txt')%>% 
+  subset(P.value < 0.05)
+dnLnc_homer <- read.delim('~/SeqAnalysis/Homer/dnLNC/knownResults.txt')%>% 
+  subset(P.value < 0.05)
+znf_homer <- read.delim('~/SeqAnalysis/Homer/znf/knownResults.txt')%>% 
+  subset(P.value < 0.05)
+
+```
+
+
+
+
+# SPARCS
+
+```{r}
+erv_sparcs <- read.csv('~/sparcs.csv.1')
+#erv_sparcs <- subset(erv_sparcs, Strand == '-')  
+#erv_sparcs <- unique(erv_sparcs)
+sparcs <- read.csv('~/sparcs.csv.2')
+#names(sparcs)[2] <- 'Gene'
+#sparcs <- sparcs$Gene
+erv_sparcs <- 
+  erv_sparcs %>% 
+  subset(Gene.Symbols %in% sparcs$Genes.containing.3.UTR.ERVs)
+
+names(erv_sparcs)
+
+erv_sparcs <- 
+  erv_sparcs[!duplicated(erv_sparcs[,c('Gene.Symbols', 'ERV.Symbols')]),]
+
+aaleTPM <- aaleTPM %>% gather(Treatment, TPM, -Gene)
+aaleTPM <- 
+  aaleTPM %>% 
+  separate(Treatment, sep = '_', 1, into = c('Treatment', 'Rep'))
+
+erv_sparcs <- merge(aaleTPM, erv_sparcs, by.x = 'Gene', by.y = 'Gene.Symbols')
+
+sparcsBox <- ggplot(erv_sparcs) + 
+  geom_jitter(aes(reorder(Gene,-TPM), TPM, color = Treatment, shape=Treatment)) + 
+  theme(text = element_text(size=20, family = "sans"),
+        legend.title = element_text(size = 20),
+        axis.text.x = element_text(angle=40, hjust=1,color='black', size=20, face='bold'),
+        axis.text.y = element_text(color = 'black', 
+                                   size=15, face = 'bold'),
+        panel.background = element_rect(fill ='white'),
+        axis.line.x = element_line(size=1),
+        axis.line.y = element_line(size=1),
+        strip.background = element_blank(),
+        strip.text = element_text(face = 'bold', size = 5, hjust=0.95),
+        legend.position='top',
+        legend.key = element_blank(),
+        axis.ticks.y = element_line(size = 1.5, color='black'), 
+        axis.title.y = element_text(face='bold'),
+        axis.ticks.x = element_line(size = 1.5, color='black'),
+        axis.ticks.length = unit(.25, 'cm')) + 
+  scale_color_manual(labels = c('CTRL', 'KRAS'), 
+                    values = c('#3C5488FF', '#E64B35FF'),
+                    name='') + xlab('') +
+  geom_vline(xintercept = seq(1.5,22.5), linetype='dotted')
+
+```
+
+# Element Count
+
+Downloaded repeatMasker tracks from Genome Browser, wrote bash script to query Element name and return number of matches
+
+```{r}
+
+
+repMask <- read.csv('~/Desktop/AALE Figures/TE/repMask.csv', header = F)
+names(repMask) <- c('SPECIES','ELEMENT','COUNT')
+repMask <- unique(repMask)
+
+humSum <- subset(repMask, SPECIES == 'HUMAN')
+humSum <- humSum %>% group_by(ELEMENT) %>% summarise(tot = sum(COUNT))
+
+sumMask <- repMask %>% group_by(ELEMENT) %>% summarise(sum = sum(COUNT))
+
+repMask <- merge(sumMask, repMask, by.x = 'ELEMENT', by.y = 'ELEMENT')
+repMask <- merge(humSum, repMask, by.x = 'ELEMENT', by.y = 'ELEMENT')
+repMask <- repMask %>% mutate(COUNT = COUNT/sum)
+
+index=c('AluSx1', 'AluYb8', 'AluYd8', 'LTR12C', 'MIRc', 'THE1A')
+values = c('SINE','SINE', 'SINE', 'ERV', 'SINE', 'ERV')
+#
+repMask$FAMILY <- values[match(repMask$ELEMENT, index)]
+
+repPlot <- ggplot(subset(repMask, !(ELEMENT %in% c('AluYf4', 'AluYb9')))) + 
+  geom_bar(aes(SPECIES, COUNT, fill=FAMILY), stat = 'identity', color='black') +
+  theme(text = element_text(size=20, family = "sans"),
+        legend.title = element_text(size = 20),
+        axis.text.x = element_text(angle=40, hjust=1,color='black', size=20, face='bold'),
+        axis.text.y = element_text(color = 'black', 
+                                   size=15, face = 'bold'),
+        panel.background = element_rect(fill ='white'),
+        axis.line.x = element_line(size=1),
+        axis.line.y = element_line(size=1),
+        strip.background = element_blank(),
+        strip.text = element_text(face = 'bold', size = 20, hjust=0.95),
+        legend.position='top',
+        legend.key = element_blank(),
+        axis.ticks.y = element_line(size = 1.5, color='black'), 
+        axis.title.y = element_text(face='bold'),
+        axis.ticks.x = element_line(size = 1.5, color='black'),
+        axis.ticks.length = unit(.25, 'cm')) +
+  xlab('') + ylab('Proportion of Total Occurences') +
+  facet_wrap(~ELEMENT, ncol = 1) +
+  scale_y_continuous(limits = c(0,1))+
+  scale_x_discrete(limits = c('GIBBON', 'ORANGUTAN', 'BONOBO', 'CHIMP', 'HUMAN')) + 
+  scale_fill_manual(labels = c('ERV', 'SINE'), 
+                    values = c('grey', 'black'), name='Family')
+  #
+
+
+        
+library(scales)
+
+```
+
