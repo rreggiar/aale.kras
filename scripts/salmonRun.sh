@@ -10,4 +10,5 @@ env=$(basename "$CONDA_PREFIX")
 
 if [[ env != reqEnv ]]; then
 	echo "switching from "$env" to "$reqEnv""
+	conda activate $reqEnv
 fi
