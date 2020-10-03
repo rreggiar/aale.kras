@@ -17,3 +17,9 @@ else
 	echo ""$reqEnv" is active"
 fi
 
+scriptName=$(basename $0)
+if [ $# -lt 1 ]; then
+    echo "error: usage $scriptName  directory containing trimmed *.fq.gz reads"
+    echo "example $scriptName  /path/to/{ctrl,kras}.{1,2,3..}/salmon.out/"
+    exit 1
+fi
