@@ -1,0 +1,14 @@
+"0","```r
+up_coding_homer <- read.delim('~/SeqAnalysis/Homer/upCoding/knownResults.txt') %>% 
+  subset(P.value < 0.05)
+dn_coding_homer <- read.delim('~/SeqAnalysis/Homer/dnCoding/knownResults.txt')%>% 
+  subset(P.value < 0.05)
+isg_homer <- read.delim('~/SeqAnalysis/Homer/isg/knownResults.txt')%>% 
+  subset(P.value < 0.05)
+upLnc_homer <- read.delim('~/SeqAnalysis/Homer/upLNC/knownResults.txt')%>% 
+  subset(P.value < 0.05)
+dnLnc_homer <- read.delim('~/SeqAnalysis/Homer/dnLNC/knownResults.txt')%>% 
+  subset(P.value < 0.05)
+znf_homer <- read.delim('~/SeqAnalysis/Homer/znf/knownResults.txt')%>% 
+  subset(P.value < 0.05)
+```"

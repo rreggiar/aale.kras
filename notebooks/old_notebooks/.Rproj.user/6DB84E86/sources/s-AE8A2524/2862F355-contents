@@ -1,0 +1,921 @@
+---
+title: "ATAC seq data viz"
+author: 'Roman E. Reggiardo'
+date: '02/26/2020'
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+ATAC-seq data exploration and analysis using alignments and peak calls generated from the ENCODE ATAC-seq pipeline with default arguments
+
+# Environment Context:
+## installs
+```{r echo=FALSE}
+# Run this cell to load in all packages used in the notebook, required upon docker startup as of now
+
+install.packages(c(
+  'ggsci',
+  'ggpubr',
+  'ggsignif',
+  'ggthemes', 
+  'ggforce',
+  'extrafont',
+  'matrixStats',
+  'ggrepel',
+  'pheatmap',
+  'viridis',
+  'VennDiagram',
+  'pheatmap',
+  'stringr',
+  'fuzzyjoin'))
+
+install.packages('fuzzyjoin')
+
+devtools::install_github("thomasp85/patchwork")
+```
+## loading
+```{r}
+suppressPackageStartupMessages({
+  library(tidyverse)
+  library(ggsci)
+  library(ggpubr)
+  library(ggsignif)
+  library(ggthemes) 
+  library(ggrepel)
+  library(ggforce)
+  library(extrafont)
+  library(matrixStats)
+  library(ggrepel)
+  library(pheatmap)
+  library(viridis)
+  library(VennDiagram)
+  library(stringr)
+  library(patchwork)
+})
+suppressMessages(loadfonts())
+```
+## setting ggplot theme, figure dirs, and other globally relevant constants
+```{r}
+theme_set(theme_classic() + 
+            theme(panel.background = element_rect(fill = 'white'),
+                axis.text = element_text(family = 'Helvetica', size = 12),
+                axis.title.x = element_text(family = 'Helvetica', size = 12),
+                axis.title.x.bottom = element_text(family = 'Helvetica', size = 12),
+                axis.title.y = element_text(family = 'Helvetica', size = 12),
+                legend.text = element_text(family = 'Helvetica', size = 12),
+                legend.title = element_text(family = 'Helvetica', size = 12),
+                axis.line = element_blank(),
+                strip.text = element_text(family = 'Helvetica', 
+                                          size = 12),
+                strip.background = element_blank())) 
+
+theme_set(theme_classic() + 
+            theme(panel.background = element_rect(fill = 'white'),
+                axis.text = element_text(family = 'Helvetica', size = 8),
+                axis.title = element_text(family = 'Helvetica', size = 10),
+                legend.text = element_text(family = 'Helvetica', size = 10),
+                legend.title = element_text(family = 'Helvetica', size = 8),
+                axis.line = element_blank(),
+                strip.text = element_text(family = 'Helvetica', size = 12, face = 'bold'),
+                strip.background = element_blank(),))
+
+figure.dir.1 <-  'figures/'
+
+chr.order <- c('chr1', 'chr2', 'chr3', 
+               'chr4', 'chr5', 'chr6', 
+               'chr7', 'chr8', 'chr9',
+               'chr10', 'chr11', 'chr12', 
+               'chr13', 'chr14', 'chr15', 
+               'chr16', 'chr17',
+               'chr18', 'chr19', 'chr20', 
+               'chr21', 'chr22', 'chrX', 'chrY')
+
+
+ifn.signature <- c("DDX58", "IFIH1", "IFNL1", "IRF9", "IFI27", "OAS2", "IFIT3", "IFIT1", 
+                   "OASL", "ISG15", "OAS3", "RSAD2", "MX1", "OAS1", "IFI44", "CH25H", "IFIT2", 
+                   "ISG20", "RNASEL", "IFI6", "HERC5", "HERC6", "GBP3", "GBP1", "IRF1", "ISG15")
+
+liu.ifn.signature <- c('ADAR', 'DDX60', 'HERC6', 'IRF7', 'OASL', 'PSM2', 'STAT2', 'TRIM25', 'BST2', 'DHX58', 'IFI35',
+                       'ISG15', 'OGFR', 'RSAD2', 'TDRD7', 'UBE2L6', 'CASP1', 'EIF2AK2', 'IFIH1', 'ISG20', 'PARP12',
+                       'RTP4', 'TRAFD1', 'USP18', 'CMPK2', 'EPSTI1', 'IFIT2', 'MX1', 'PARP14', 'SAMD9L', 'TRIM14',
+                       'CXCL10', 'GBP4', 'IFIT3', 'NMI', 'PNPT1', 'SP110', 'TRIM21')
+
+te.signature <- c('L1MEc', 'THE1D', 'L1MD2', 'MER20', 'L1MC4a', 'AluSz', 'AluY', 'AluSx1')
+
+chr.19.bins <- data.frame(chr = 'chr19',
+                          bin = c('p13.3', 'p13.2', 'p13.13', 'p13.12', 'p13.11',
+                                  'p12', 'q12', 'q13.11', 'q13.12', 'q13.13',
+                                  'q13.2', 'q13.31', 'q13.32', 'q13.33', 'q13.41', 'q13.42',
+                                  'q13.43'),
+                          start = c(1, 6900001, 12600001, 13800001, 16100001, 19900001,
+                                    28100001, 31900001, 35100001, 37800001, 38200001, 
+                                    42900001, 44700001, 47500001, 50900001, 53100001,
+                                    55800001),
+                          end = c(6900000, 12600000, 13800000, 16100000, 19900000,
+                                    28100000, 31900000, 35100000, 37800000, 38200000, 
+                                    42900000, 44700000, 47500000, 50900000, 53100000,
+                                    55800000, 58617616))
+
+lnc.genes <- read.table('data/gen.32.pure.lnc.names') %>% rename(gene = 'V1')
+gencode.genes <- read.table('data/gen.32.coding.names') %>% rename(gene = 'V1')
+
+intra.aale.de.seq <- 
+  read_csv('data/aale.intra.kras.v.ctrl.de-seq.csv') %>% 
+  filter(padj < 0.01) %>% 
+  rename(gene = 'X1')
+
+c2h2.znfs <- 
+  read_csv('data/znf.c2h2.hgnc.csv',
+           skip = 2, 
+           col_names = c('hgnc', 'gene', 'anno', 'alias', 'junk', 'locus'))
+
+intra.aale.de.seq %>% 
+  filter(abs(log2FoldChange) > 0) %>% 
+  mutate(biotype = ifelse(gene %in% c2h2.znfs$gene, 'C2H2-ZNF', 
+                          ifelse(gene %in% c(ifn.signature,liu.ifn.signature), 'ISG', 
+                                 ifelse(gene %in% lnc.genes$gene, 'lncRNA', 'CODING')))) %>% 
+  filter(biotype == 'C2H2-ZNF',
+         log2FoldChange < 0) -> dn.znf.c2h2
+  #table() %>% 
+  #as.data.frame() %>% 
+  #rename(biotype = '.') %>% 
+  #mutate_if(is.numeric, list(~./sum(.))) #%>% 
+  ggplot(aes(reorder(biotype, -log2FoldChange), log2FoldChange, color = biotype)) + 
+  #geom_bar(position = 'stack')
+  geom_violin() + 
+  geom_sina() + 
+  scale_color_viridis_d()
+
+
+```
+
+# Datasets & Analysis:
+## feature counts:
+not thrilled with this so far
+```{r}
+## this hasn't been super useful
+feature.counts <- 
+  read_tsv('data/aale.atac.feature.counts.tsv', skip = 1) %>% 
+  rename(KRAS = 'AALE_KRAS.pe.tn5.bam', CTRL = 'AALE_CTRL.pe.tn5.bam') %>% 
+  mutate_at(c('KRAS', 'CTRL'), ~(scale(.) %>% as.vector)) %>% 
+  subset(Chr == 'chr19')
+```
+### viz
+```{r}
+ggplot(feature.counts,
+       aes(KRAS, CTRL, color = Chr)) + 
+  geom_point()
+  
+```
+## annotated peak output (peak files ~ bed 12):
+```{r}
+read.anno.peaks <- function(path, exp){
+  anno.file <- read_tsv(path, skip = 1, 
+                              col_names = c('peak','chr', 'start', 'end',
+                                            'strand', 'score', 'focus', 
+                                            'annotation', 'details', 'tss.dist', 
+                                            'prom.id', 'entrez.id', 'unigene', 
+                                            'refeseq', 'ensembl', 'gene', 
+                                            'alias', 'description','type')) %>% 
+  select(-focus) %>% 
+  mutate(condition = exp)
+  return(anno.file)
+  remove(anno.file)
+}
+
+
+kras.anno.peaks <- read.anno.peaks('data/kras.peaks.anno.bed', 'KRAS')
+ctrl.anno.peaks <- read.anno.peaks('data/ctrl.peaks.anno.bed', 'CTRL')
+
+# combine rowwise into a comprehensive data set
+aale.anno.peaks <- 
+  rbind(ctrl.anno.peaks,
+        kras.anno.peaks)
+```
+## annotation stats:
+```{r}
+read.anno.stats <- function(path, exp){
+  anno.stats <- read_tsv(path, skip = 1,
+                            col_names = c('annotation', 'peak.count', 
+                                          'size', 'log2.ratio', 'log.p.enrich')) %>% 
+  filter(str_detect('Annotation', annotation, negate = T)) %>% 
+  group_by(annotation) %>% 
+  filter(row_number(annotation) == 1) %>% 
+  mutate(condition = exp)
+  return(anno.stats)
+  remove(anno.stats)
+}
+
+kras.anno.stats <- read.anno.stats('data/kras.spec.peaks.stats.txt', 'KRAS')
+ctrl.anno.stats <- read.anno.stats('data/ctrl.spec.peaks.stats.txt', 'CTRL')
+
+# combine and calculate some useful summary values
+aale.anno.stats <- rbind(kras.anno.stats,
+                         ctrl.anno.stats) %>% 
+  ungroup() %>% 
+  mutate(peak.count = as.numeric(peak.count)) %>% 
+  filter(!grepl('[?]', annotation)) %>% 
+  select(condition, annotation, peak.count) %>% 
+  spread(condition, peak.count) %>% 
+  mutate_if(is.numeric, list(~./sum(.))) %>% 
+  gather(condition, fraction, -annotation)
+```
+### viz
+```{r}
+ggplot(aale.anno.stats,
+       aes(reorder(annotation, fraction), fraction, fill = condition)) + 
+  geom_col(position = 'dodge') + 
+  theme(axis.text.x = element_text(angle = 40, hjust = 1))
+```
+## collapsed and merged peaks for comparison:
+```{r}
+collapse.peaks <- read_tsv('data/aale.collapse.merge.sort.peak.bed', 
+                           col_names = c('chr', 'start', 'end', 
+                                         'name', 'fc', 'pval', 
+                                         'qval', 'rel.summit')) %>%
+  mutate(peak = paste0('Peak', "_", row_number())) %>% 
+  separate_rows(c(name, fc, pval, qval, rel.summit), sep = ',') %>% 
+  mutate(fc = as.numeric(fc),
+         pval = as.numeric(pval),
+         qval = as.numeric(qval),
+         rel.summit = as.numeric(rel.summit)) %>% 
+  separate(name, sep = '_', into = c('condition', 'junk', 'trash')) %>% 
+  select(-junk, -trash) %>% 
+  group_by(chr, start, end, condition, peak) %>% 
+  summarize(fc = mean(fc),
+            pval = mean(pval),
+            qval = mean(qval),
+            summit = mean(rel.summit))
+
+## need to generate the comparison sets separately in order to include peak annotations
+collapse.peaks %>% 
+  select(-pval, -qval, -summit, -peak) %>% 
+  spread(condition, fc) %>% 
+  #filter(! is.na(KRAS),
+  #       ! is.na(CTRL)) %>% 
+  mutate(KRAS = replace_na(KRAS, 0),
+         CTRL = replace_na(CTRL, 0),
+         KRAS = KRAS + 0.001,
+         CTRL = CTRL + 0.001) %>% 
+  ungroup() %>% 
+  mutate(log2FC = log2(KRAS/CTRL),
+         start = start + 1) %>% # gotta adjust the starts to match the bedtools stuff to homer
+  #subset(chr == 'chr19') %>% 
+  merge(kras.anno.peaks, by = c('chr', 'start', 'end')) -> kras.anno.collapsed.peaks
+  #merge(aale.anno.peaks, by = c('chr', 'start', 'end')) -> kras.anno.collapsed.peaks
+
+collapse.peaks %>% 
+  select(-pval, -qval, -summit, -peak) %>% 
+  spread(condition, fc) %>% 
+  #filter(! is.na(KRAS),
+  #       ! is.na(CTRL)) %>% 
+  mutate(KRAS = replace_na(KRAS, 0),
+         CTRL = replace_na(CTRL, 0),
+         KRAS = KRAS + 0.001,
+         CTRL = CTRL + 0.001) %>% 
+  ungroup() %>% 
+  mutate(log2FC = log2(KRAS/CTRL),
+         start = start + 1) %>% # gotta adjust the starts to match the bedtools stuff to homer
+  #subset(chr == 'chr19') %>% 
+  merge(ctrl.anno.peaks, by = c('chr', 'start', 'end')) -> ctrl.anno.collapsed.peaks
+
+## and then bind into the reference data set
+aale.anno.collapsed.peaks <- 
+  rbind(kras.anno.collapsed.peaks,
+        ctrl.anno.collapsed.peaks) %>% 
+  unique() %>% 
+  separate(annotation, sep = '[(]', into = c('anno', 'explained')) %>% 
+  separate(explained, sep = '[)]', into = c('motif.type', 'junk')) %>% 
+  select(-junk)
+
+```
+
+### generate specific subsets for condition
+```{r}
+collapse.peaks %>% 
+  select(-pval, -qval, -summit, -peak) %>% 
+  spread(condition, fc) %>% 
+  filter(is.na(KRAS)) %>% 
+  select(-KRAS, -CTRL) %>% 
+  ungroup() %>% 
+  mutate(start = start + 1) %>% 
+  merge(ctrl.anno.peaks, by = c('chr', 'start', 'end')) %>% 
+  write_tsv('data/ctrl.specific.anno.bed')
+  
+aale.anno.collapsed.peaks %>% 
+  filter(abs(log2FC) > 0.5) %>% 
+  select(-KRAS, -CTRL, -log2FC) %>% 
+  ungroup() %>% 
+  unite('peak', c(condition,peak), sep = '_') %>% 
+  write_tsv('data/aale.anno.bed')
+  
+kras.anno.collapsed.peaks %>% 
+  separate(annotation, sep = '[(]', into = c('anno', 'explained')) %>%
+  filter(chr == 'chr19',
+         grepl('ZNF', gene),
+         log2FC > 0,
+         grepl('TSS', anno)) %>% 
+  select(-CTRL, -KRAS, -log2FC) %>% 
+  write_tsv('data/up.znf.chr19.anno.bed')
+
+collapse.peaks %>% 
+  filter(condition == 'KRAS') %>% 
+  select(peak, chr, start, end) %>% 
+  mutate(start = start + 1) %>% 
+  merge(select(.data = kras.anno.peaks, peak, chr, start, end), 
+          by = c('chr', 'start', 'end')) -> kras.peak.conversion
+
+znf.peaks <- 
+  kras.anno.peaks %>%
+  rbind(ctrl.anno.peaks) %>% 
+  filter(grepl('ZNF', gene),
+         gene %in% filter(intra.aale.de.seq, log2FoldChange < 0)$gene,
+         grepl('TSS', annotation)) %>% 
+  merge(kras.peak.conversion, by.x = 'peak', by.y = 'peak.y') %>% 
+  merge(intra.aale.de.seq, by = 'gene')
+```  
+### viz
+```{r}
+aale.anno.collapsed.peaks %>% 
+  merge(intra.aale.de.seq, by = 'gene') %>% 
+  mutate(dir = log2FC * log2FoldChange) %>% 
+  #filter(dir > 0) %>% 
+  mutate(chr = factor(chr, levels = chr.order)) %>% 
+  filter(grepl('TSS', anno),  
+         abs(log2FoldChange) > 0,
+         grepl('ZNF|^ZSCAN|^ZFH|^KLF', gene)) %>% 
+  unique() %>% 
+  #ggplot(aes(gene, tss.dist)) + 
+  #geom_point(aes(color = details)) + 
+  #geom_boxplot()
+  ggplot(aes(log2FoldChange, log2FC, color = log2FoldChange, label = gene)) + 
+  #ggplot(aes(start, log2FC, color = log2FoldChange, label = gene)) + 
+  #geom_point(size = 1) + 
+  geom_point() +
+  geom_text_repel(aes(label = ifelse(abs(log2FoldChange) > 1.75, paste0(gene, '-', chr), ''))) +
+  #geom_smooth(method = 'lm', color = 'black', se = F) + 
+  geom_hline(yintercept = 0, linetype = 'dotted') +
+  geom_vline(xintercept = 0, linetype = 'dotted') + 
+  #facet_wrap(~chr, ncol = 3) +
+  theme(legend.position = 'bottom') + 
+  scale_color_viridis_c() +
+  guides(color = guide_colorbar(nbin = 100,
+                                barwidth = 10,
+                                barheight = 0.4)) +
+  ylim(-25,25)
+
+aale.anno.collapsed.peaks %>% 
+  subset(chr == 'chr19',
+         abs(log2FC) > 0.25) %>% 
+  fuzzyjoin::fuzzy_left_join(chr.19.bins,
+                           by = c('chr' = 'chr',
+                                  'start' = 'start',
+                                  'end' = 'end'),
+                           match_fun = list(`==`, `>=`, `<=`)) %>% 
+  ggplot(aes(reorder(bin, start.y), log2FC)) + 
+  geom_sina() + ylim(-20,20) + geom_hline(yintercept = 0, color = 'white', size = 3)
+
+aale.anno.collapsed.peaks %>% 
+  merge(intra.aale.de.seq, by = 'gene') %>% 
+  mutate(dir = log2FC * log2FoldChange) %>% 
+  filter(dir > 0) #%>% 
+  mutate(chr = factor(chr, levels = chr.order)) %>% 
+  filter(grepl('Alu|MER|LTR|LINE', details), 
+         abs(log2FoldChange) > 1.5,
+         gene %in% ifn.signature) %>% 
+  unique() %>% 
+  #ggplot(aes(gene, tss.dist)) + 
+  #geom_point(aes(color = details)) + 
+  #geom_boxplot()
+  ggplot(aes(log2FoldChange, log2FC, color = log2FoldChange, label = paste0(gene, '-', details))) + 
+  #ggplot(aes(start, log2FC, color = log2FoldChange, label = gene)) + 
+  #geom_point(size = 1) + 
+  geom_point() +
+  geom_text_repel() +
+  #geom_smooth(method = 'lm', color = 'black', se = F) + 
+  geom_hline(yintercept = 0, linetype = 'dotted') +
+  geom_vline(xintercept = 0, linetype = 'dotted') + 
+  facet_wrap(~chr, ncol = 3) +
+  theme(legend.position = 'bottom') + 
+  scale_color_viridis_c() +
+  guides(color = guide_colorbar(nbin = 100, 
+                                barwidth = 10, 
+                                barheight = 0.4))
+```
+
+## Homer enriched motifs -- Global:
+These are the basic, full set 
+```{r}
+kras.enriched.motifs <- 
+  read_tsv('data/kras.homer.motifs.txt',
+           col_names = c('name', 'consensus', 'pval', 
+                         'log.pval', 'qval', 'count',
+                         'fraction', 'bg.count', 'bg.fraction'),
+           skip = 1) %>% 
+  separate(name, sep = '/', into = c('gene', 'origin', 'homer')) %>% 
+  select(-homer) %>% 
+  filter(qval < 0.01) %>% 
+  mutate(fraction = as.numeric(sub("%", "", fraction))/100,
+         bg.fraction = as.numeric(sub("%", "", bg.fraction))/100,
+         condition = 'ctrl')
+
+ctrl.enriched.motifs <- 
+  read_tsv('data/ctrl.homer.motifs.txt',
+           col_names = c('name', 'consensus', 'pval', 
+                         'log.pval', 'qval', 'count',
+                         'fraction', 'bg.count', 'bg.fraction'),
+           skip = 1) %>% 
+  separate(name, sep = '/', into = c('gene', 'origin', 'homer')) %>% 
+  select(-homer) %>% 
+  filter(qval < 0.01) %>% 
+  mutate(fraction = as.numeric(sub("%", "", fraction))/100,
+         bg.fraction = as.numeric(sub("%", "", bg.fraction))/100,
+         condition = 'ctrl')
+
+kras.specific.enriched.motifs <- 
+  read_tsv('data/kras.specific.homer.motifs.txt',
+           col_names = c('name', 'consensus', 'pval', 
+                         'log.pval', 'qval', 'count',
+                         'fraction', 'bg.count', 'bg.fraction'),
+           skip = 1) %>% 
+  separate(name, sep = '/', into = c('gene', 'origin', 'homer')) %>% 
+  select(-homer) %>% 
+  filter(qval < 0.01) %>% 
+  mutate(fraction = as.numeric(sub("%", "", fraction))/100,
+         bg.fraction = as.numeric(sub("%", "", bg.fraction))/100,
+         condition = 'ctrl')
+
+ctrl.specific.enriched.motifs <- 
+  read_tsv('data/ctrl.specific.homer.motifs.txt',
+           col_names = c('name', 'consensus', 'pval', 
+                         'log.pval', 'qval', 'count',
+                         'fraction', 'bg.count', 'bg.fraction'),
+           skip = 1) %>% 
+  separate(name, sep = '/', into = c('gene', 'origin', 'homer')) %>% 
+  select(-homer) %>% 
+  filter(qval < 0.01) %>% 
+  mutate(fraction = as.numeric(sub("%", "", fraction))/100,
+         bg.fraction = as.numeric(sub("%", "", bg.fraction))/100,
+         condition = 'ctrl')
+
+ctrl.specific.enriched.motifs %>% 
+  filter(! gene %in% kras.specific.enriched.motifs$gene) %>% 
+  select(gene)
+```
+### Viz
+```{r}
+bound.motifs <- 
+  merge(kras.specific.enriched.motifs, ctrl.specific.enriched.motifs, by = 'gene') %>% 
+  rename(KRAS = 'fraction.x',
+         CTRL = 'fraction.y')
+
+filtered.bound.motifs <- 
+  merge(kras.specific.enriched.motifs, ctrl.specific.enriched.motifs, by = 'gene') %>% 
+  rename(KRAS = 'fraction.x',
+         CTRL = 'fraction.y') %>% 
+  mutate(diff = KRAS - CTRL) %>% 
+  filter(diff > 0.025)
+
+motif.scatter.unfilt <- 
+  ggplot(bound.motifs,
+       aes(KRAS, CTRL, label = gene)) + 
+  geom_point()
+
+motif.scatter.filt <- 
+  ggplot(filtered.bound.motifs,
+       aes(KRAS, CTRL, label = gene)) + 
+  geom_point() + 
+  ggtitle('KRAS - CTRL > 0.025') + 
+  geom_text_repel()
+
+motif.scatter.unfilt + motif.scatter.filt
+
+```
+
+## Homer enriched motifs -- Up IFN genes/peaks:
+```{r}
+ifn.peak.motifs <- 
+  read_tsv('data/ifn.found.motifs.txt',
+           col_names = c('peak', 'offset', 'sequence',
+                         'motif', 'strand', 'score')) %>% 
+  merge(kras.anno.peaks, by = 'peak') %>% 
+  separate(motif, sep = '/', into = c('motif', 'details')) 
+
+as.data.frame(table(ifn.peak.motifs$motif))
+
+ggplot(as.data.frame(table(ifn.peak.motifs$motif)), aes(reorder(Var1, Freq), Freq)) + 
+  geom_col() + 
+  theme(axis.text.x = element_text(angle = 40, hjust = 1)) + 
+  geom_hline(yintercept = seq(0,30,5), color = 'white')
+```
+
+## Homer enriched motifs -- Down ZNF genes/peaks:
+```{r}
+dn.znf.peak.motifs <- 
+  read_tsv('data/dn.znf.found.motifs.txt',
+           col_names = c('peak', 'offset', 'sequence',
+                         'motif', 'strand', 'motif.score'),
+           skip = 1) %>% 
+  separate(motif, sep = '/', into = c('motif', 'details')) %>% 
+  separate(motif, sep = '[(]', into = c('motif', 'type')) %>% 
+  merge(ctrl.anno.peaks, by = 'peak') #%>% 
+  merge(intra.aale.de.seq, by.x = 'motif', by.y = 'gene')
+
+
+as.data.frame(table(znf.peak.motifs$motif))
+
+ggplot(as.data.frame(table(znf.peak.motifs$motif)), aes(reorder(Var1, Freq), Freq)) + 
+  geom_col() + 
+  theme(axis.text.x = element_text(angle = 40, hjust = 1)) + 
+  geom_hline(yintercept = seq(0,30,5), color = 'white')
+  
+up.znf.peak.motifs <- 
+  read_tsv('data/up.znf.chr19.found.motifs.txt',
+           col_names = c('peak', 'offset', 'sequence',
+                         'motif', 'strand', 'motif.score'), skip = 1) %>% 
+  separate(motif, sep = '/', into = c('motif', 'details')) %>% 
+  separate(motif, sep = '[(]', into = c('motif', 'type')) %>% 
+  filter(! motif %in% dn.znf.peak.motifs$motif) %>% 
+  merge(kras.anno.peaks, by = 'peak') %>% 
+  merge(intra.aale.de.seq, by.x = 'gene', by.y = 'gene') %>% 
+  select(motif, gene, log2FoldChange) %>% 
+  unique()
+
+ggplot(as.data.frame(table(up.znf.peak.motifs$motif)), aes(reorder(Var1, Freq), Freq)) + 
+  geom_col() + 
+  theme(axis.text.x = element_text(angle = 40, hjust = 1)) + 
+  geom_hline(yintercept = seq(0,150,25), color = 'white')
+
+as.data.frame(table(znf.peak.motifs$motif))
+
+ggplot(as.data.frame(table(znf.peak.motifs$motif)), aes(reorder(Var1, Freq), Freq)) + 
+  geom_col() + 
+  theme(axis.text.x = element_text(angle = 40, hjust = 1)) + 
+  geom_hline(yintercept = seq(0,30,5), color = 'white')
+```
+
+## Homer enriched motifs -- specific ctrl/kras
+```{r}
+
+kras.specfic.peak.motifs <- 
+  read_tsv('data/kras.specific.found.peaks',
+           col_names = c('peak', 'offset', 'sequence',
+                         'motif', 'strand', 'motif.score'),
+           skip = 1) %>% 
+  separate(motif, sep = '/', into = c('motif', 'details')) %>% 
+  separate(motif, sep = '[(]', into = c('motif', 'type')) %>% 
+  merge(kras.anno.peaks, by = 'peak')
+
+kras.log2fc.v.motif <- 
+  kras.specfic.peak.motifs %>% 
+  filter(! motif %in% ctrl.specfic.peak.motifs$motif) %>% 
+  merge(intra.aale.de.seq, by.x = 'motif', by.y = 'gene') %>% 
+  select(motif, motif.score, log2FoldChange) %>% 
+  unique() %>% 
+  ggplot(aes(reorder(motif, log2FoldChange), motif.score, color = log2FoldChange)) + 
+  ggforce::geom_sina() + 
+  scale_color_viridis_c(limits = c(-4,4)) + 
+  xlab('')
+
+
+kras.specfic.peak.motifs %>% 
+  filter(! motif %in% ctrl.specfic.peak.motifs$motif) %>% 
+  mutate(motif = ifelse(motif == 'ISRE', 'IRF9', motif)) %>% 
+  merge(intra.aale.de.seq, by.x = 'gene', by.y = 'gene') %>% 
+  select(gene, motif, motif.score, log2FoldChange) %>% 
+  unique() %>% 
+  #filter(motif %in% c(ifn.signature, 'ETV1')) %>% 
+  filter(gene %in% c('STAT1', 'IRF1', 'IRF9', 'IRF7')) %>% 
+  #filter(grepl('IRF8', motif)) %>% 
+  group_by(gene, motif, log2FoldChange) %>% 
+  top_n(1, motif.score) -> kras.motif.dist
+
+ggplot(kras.motif.dist, aes(gene, motif.score, label = motif, color = log2FoldChange)) + 
+  geom_point() +
+  xlab('') + 
+  scale_y_continuous(limits = c(4.5,15)) +
+  geom_text_repel(aes(label = ifelse(abs(log2FoldChange)  > 1, 
+                                     motif, '')),
+                      color = ifelse(kras.motif.dist$motif %in% kras.motif.dist$gene, 'red', 'black'),
+                  segment.colour = NA,
+                  size = 3) +
+  scale_color_viridis_c()
+
+ggplot(kras.motif.dist, aes(motif, log2FoldChange, label = gene, color = log2FoldChange)) + 
+  geom_point() +
+  xlab('') + 
+  geom_text_repel(aes(label = ifelse(abs(log2FoldChange)  > 1, 
+                                     gene, '')),
+                      color = ifelse(kras.motif.dist$motif %in% kras.motif.dist$gene, 'red', 'black'),
+                  segment.colour = NA,
+                  size = 3) +
+  scale_color_viridis_c()
+
+ggplot(kras.motif.dist, aes(motif.score, log2FoldChange, label = gene, color = log2FoldChange)) + 
+  geom_point() +
+  #xlab('') + 
+  #scale_y_continuous(limits = c(-6,6)) +
+  geom_text_repel(aes(label = ifelse(abs(log2FoldChange) > 3.5,
+                                     gene, '')),
+                      color = ifelse(kras.motif.dist$gene %in% kras.motif.dist$motif, 'red', 'black'),
+                  segment.colour = NA,
+                  size = 3) +
+  scale_color_viridis_c() + 
+  geom_hline(yintercept = c(-1, 1), linetype = 'dashed', alpha = 0.3) +
+  facet_col(~motif)
+
+
+ggplot(as.data.frame(table(filter(kras.specfic.peak.motifs, 
+                                  ! motif %in% ctrl.specfic.peak.motifs$motif)$motif)), 
+       aes(reorder(Var1, Freq), Freq)) + 
+  geom_col() + 
+  theme(axis.text.x = element_text(angle = 40, hjust = 1)) + 
+  geom_hline(yintercept = seq(0,30,5), color = 'white')
+  
+ctrl.specfic.peak.motifs <- 
+  read_tsv('data/ctrl.specific.found.peaks',
+           col_names = c('peak', 'offset', 'sequence',
+                         'motif', 'strand', 'motif.score'),
+           skip = 1) %>% 
+  separate(motif, sep = '/', into = c('motif', 'details')) %>% 
+  separate(motif, sep = '[(]', into = c('motif', 'type')) %>% 
+  merge(ctrl.anno.peaks, by = 'peak')
+
+ctrl.log2fc.v.motif <- 
+  ctrl.specfic.peak.motifs %>% 
+  #filter(! motif %in% kras.specfic.peak.motifs$motif) %>% 
+  merge(intra.aale.de.seq, by.x = 'motif', by.y = 'gene') %>% 
+  select(motif, motif.score, log2FoldChange) %>% 
+  unique() %>% 
+  ggplot(aes(reorder(motif, log2FoldChange), motif.score, color = log2FoldChange)) + 
+  ggforce::geom_sina() + 
+  scale_color_viridis_c(limits = c(-4,4)) + 
+  xlab('')
+
+ctrl.specfic.peak.motifs %>% 
+  #filter(! motif %in% ctrl.specfic.peak.motifs$motif) %>% 
+  merge(intra.aale.de.seq, by.x = 'gene', by.y = 'gene') %>% 
+  select(gene, motif, motif.score, log2FoldChange) %>% 
+  unique() %>% 
+  filter(grepl('ZNF|ZSCAN', gene)) #%>% 
+  group_by(gene, motif, log2FoldChange) %>% 
+  #filter(gene %in% c('ZSCAN18', 'ZNF667', 'ZNF382', 'ZNF90', 'ZNF736')) %>% 
+  #filter(gene == 'ZNF322') %>% 
+  top_n(1, motif.score) -> ctrl.motif.dist
+
+ctrl.motif.dist %>% merge(intra.aale.de.seq, by.x = 'motif', by.y = 'gene') %>% 
+  ggplot(aes(log2FoldChange.x, log2FoldChange.y, label = paste0(gene,'-', motif))) + 
+  geom_point() + 
+  geom_text_repel() + 
+  ylab('motif log2FC') + xlab('gene log2FC') + 
+  scale_y_continuous(limits = c(-5,5)) + 
+  scale_x_continuous(limits = c(-6, 6)) + 
+  geom_hline(yintercept = 0, linetype = 'dashed') + 
+  geom_vline(xintercept = 0, linetype = 'dashed') 
+ 
+ctrl.znf.tfs <- 
+  ggplot(ctrl.motif.dist, aes(reorder(gene, log2FoldChange), motif.score, label = motif)) + 
+  geom_boxplot() +
+  xlab('') +  
+  scale_y_continuous(limits = c(0,25)) + 
+  geom_text_repel(color = ifelse(ctrl.motif.dist$motif %in% ctrl.motif.dist$gene, 'red', 'black'),
+                  segment.colour = NA) + 
+  theme(axis.text.x = element_text(angle = 40, hjust = 1))
+
+#label = #ifelse(motif %in% c('TCF4', 'RUNX1', 'ZNF322', 'ZNF415', 'AP-1'), 
+                              #       motif, '')),
+
+ctrl.znf.l2fc <- 
+  ggplot(ctrl.motif.dist %>% ungroup() %>% select(gene, log2FoldChange) %>% unique(), 
+       aes(reorder(gene, log2FoldChange), log2FoldChange)) + 
+  geom_col()+ 
+  theme(axis.text.x = element_blank())
+  
+ggplot(as.data.frame(table(filter(ctrl.specfic.peak.motifs, 
+                                  ! motif %in% kras.specfic.peak.motifs$motif)$motif)), 
+       aes(reorder(Var1, Freq), Freq)) + 
+  geom_col() + 
+  theme(axis.text.x = element_text(angle = 40, hjust = 1)) + 
+  geom_hline(yintercept = seq(0,40000,10000), color = 'white')
+```
+## Homer DE motifs:
+```{r}
+aale.de.enriched.motifs <- 
+  read_tsv('data/aale.found.motifs.txt',
+           col_names = c('peak', 'offset', 'sequence',
+                         'motif', 'strand', 'motif.score'),
+           skip = 1) %>% 
+  separate(motif, sep = '/', into = c('motif', 'details')) %>% 
+  separate(motif, sep = '[(]', into = c('motif', 'type')) %>% 
+  separate(type, sep = '[)]', into = c('type', 'junk')) %>% 
+  select(-junk, -details) %>% 
+  separate(peak, sep = '_', into = c('condition', 'Peak', 'number')) %>% 
+  unite(peak, c(Peak, number), sep = '_') %>% 
+  merge(aale.anno.collapsed.peaks %>% 
+          select(-motif.type, -prom.id, -unigene, 
+                 -refeseq, -ensembl, -alias) %>% 
+          rename(biotype = 'type'), 
+        by = c('peak', 'condition', 'strand'))
+
+aale.de.enriched.motifs %>% 
+  mutate(motif = ifelse(motif == 'ISRE', 'IRF9', motif)) %>% 
+  merge(intra.aale.de.seq %>% 
+          select(gene, motif.diff = log2FoldChange), 
+        by.x = 'motif', 
+        by.y = 'gene', 
+        all.x = T) %>% 
+  merge(intra.aale.de.seq %>% 
+          select(gene, gene.diff = log2FoldChange), 
+        by.x = 'gene', 
+        by.y = 'gene', 
+        all.x = T ) %>% 
+  filter_at(.vars = c('motif.diff', 'gene.diff'), 
+            .vars_predicate = any_vars(!is.na(.))) %>% 
+  mutate(motif.diff = replace_na(motif.diff, 0),
+         gene.diff = replace_na(gene.diff, 0)) -> aale.de.genes.peaks
+```
+### viz
+```{r}
+aale.de.genes.peaks %>% 
+  mutate(dir = motif.diff * gene.diff) %>% 
+  #filter(dir > 0) %>% 
+  mutate(chr = factor(chr, levels = chr.order)) %>% 
+  filter(grepl('TSS', anno),
+         abs(gene.diff) > 0,
+         motif %in% dn.znf.c2h2$gene) %>% 
+  group_by(gene, condition) %>% 
+  #filter(abs(motif.diff) > 0) %>% 
+  top_n(3, abs(motif.diff)) %>% 
+  select(-peak, -sequence) %>% 
+  unique() %>% 
+  #ggplot(aes(gene, tss.dist)) + 
+  #geom_point(aes(color = details)) + 
+  #geom_boxplot()
+  ggplot(aes(gene.diff, log2FC, color = motif.diff, label = paste0(motif, '-', gene))) + 
+  #ggplot(aes(start, log2FC, color = log2FoldChange, label = gene)) + 
+  #geom_point(size = 1) + 
+  geom_point() +
+  geom_text_repel() +
+  #geom_smooth(method = 'lm', color = 'black', se = F) + 
+  geom_hline(yintercept = 0, linetype = 'dotted') +
+  geom_vline(xintercept = 0, linetype = 'dotted') + 
+  facet_col(~anno) +
+  theme(legend.position = 'bottom') + 
+  scale_color_viridis_c(limits = c(-14,14)) +
+  #scale_x_continuous(limits = c(-4,4)) + 
+  guides(color = guide_colorbar(nbin = 100,
+                                barwidth = 10,
+                                barheight = 0.4))
+```
+
+### Clustering master data set:
+```{r}
+## PCA
+aale.de.genes.peaks.pca <-  
+  aale.de.genes.peaks %>%
+  filter(!grepl('X|Y', chr)) %>% 
+  mutate(value = 1) %>% 
+  spread(biotype, value, fill = 0) %>% 
+  mutate(value = 1) %>% 
+  spread(anno, value, fill = 0) %>% 
+  mutate(value = 1,
+         cond_dupe = condition) %>% 
+  spread(cond_dupe, value, fill = 0) %>% 
+  select(-details, -sequence, -description) %>% 
+  mutate(chr = as.numeric(substring(chr, 4))) %>% 
+  unite(ID, c(peak, condition, gene, motif, strand, type, offset), sep = ',') %>% 
+  remove_rownames() %>% 
+  column_to_rownames('ID') %>% 
+  prcomp(scale=F)
+
+summary(aale.de.genes.peaks.pca)
+pcs.of.interest <- apply(aale.de.genes.peaks.pca$x, 2, var)
+pcs.props <-  pcs.of.interest/sum(pcs.of.interest)
+cumsum(pcs.props)[1]
+ 
+# convert output to dataframe
+pca.out <- 
+  as.data.frame(aale.de.genes.peaks.pca$x) %>% 
+  rownames_to_column('peak.id') %>% 
+  separate(peak.id, sep = ',', into = c('peak', 'condition', 'gene', 'motif', 'strand', 'type', 'offset'))
+# summarize PC contributions
+pca.out.summary <- 
+  as.data.frame(summary(aale.de.genes.peaks.pca)$importance) %>% 
+  rownames_to_column('metric') %>% 
+  gather(pc, value, -metric) %>% 
+  spread(metric, value)
+# summarize PC contributions
+pca.out.contributions <- 
+  as.data.frame(aale.de.genes.peaks.pca$rotation) %>% 
+  rownames_to_column('tx') %>% 
+  gather(pc, contrib, -tx) %>% 
+  group_by(pc) %>% 
+  mutate(contrib = abs(contrib)) %>% 
+  filter(contrib > quantile(contrib, 0.95))
+
+# plot PC1 and PC2
+ggplot(pca.out,
+       aes(PC1, PC2, color = condition)) + 
+  geom_point(alpha = 4) + 
+  #scale_size_continuous(range = c(0.1, 2.5), breaks = c(0,5,10,15,20)) + 
+  xlab(paste('PC1', round(cumsum(pcs.props)[1], digits = 3), sep = ' ')) +
+  ylab(paste('PC2', round(cumsum(pcs.props)[2] - cumsum(pcs.props)[1], 
+                          digits = 3), sep = ' ')) +
+  scale_color_viridis_d(direction = -1, name = 'condition') + 
+  geom_vline(xintercept = 0, linetype = 'dotted', alpha = 0.3, size = 0.25) +
+  geom_hline(yintercept = 0, linetype = 'dotted', alpha = 0.3, size = 0.25) + 
+  # ggrepel::geom_text_repel(size = 4,
+  #                           point.padding = 0.2,
+  #                           box.padding = 0.11,
+  #                           color = 'black',
+  #                          segment.colour = NA) + 
+  theme(legend.position = 'right',
+          legend.key.width = unit(0.125,'cm'),
+          legend.key.height = unit(0.4, 'cm'))
+
+#ggsave("lnc.pca.plot.2.5x1.5.legend.pdf", width = 2.5, height = 1.5, units = 'in')
+
+# print top contibutors per PC
+pca.out.contributions %>%
+  group_by(pc) %>%
+  filter(pc %in% c("PC1", "PC2")) %>% 
+  select(pc, contrib, tx) %>% 
+  mutate(contrib = abs(contrib)) %>% 
+  top_n(10, wt = contrib) %>% 
+  arrange(pc, contrib)
+```
+
+## meta genes:
+```{r}
+kras.ifn.meta.gene <- read_tsv('data/up.ifn.meta.gene.txt',
+                          col_names = c('dist', 'peaks'),
+                          skip = 1) %>% 
+  mutate(condition = 'kras')
+
+ctrl.ifn.meta.gene <- read_tsv('data/up.ctrl.ifn.meta.gene.txt',
+                          col_names = c('dist', 'peaks'),
+                          skip = 1) %>% 
+  mutate(condition = 'ctrl')
+
+ifn.meta.gene <- rbind(kras.ifn.meta.gene, ctrl.ifn.meta.gene)
+
+ifn.draft.peak <- ggplot(ifn.meta.gene, aes(dist, peaks, color = condition)) + 
+  geom_freqpoly(stat = 'identity')
+
+kras.znf.meta.gene <- read_tsv('data/dn.kras.znf.meta.gene.txt',
+                          col_names = c('dist', 'peaks'),
+                          skip = 1) %>% 
+  mutate(condition = 'kras')
+
+ctrl.znf.meta.gene <- read_tsv('data/dn.ctrl.znf.meta.gene.txt',
+                          col_names = c('dist', 'peaks'),
+                          skip = 1) %>% 
+  mutate(condition = 'ctrl')
+
+znf.meta.gene <- rbind(kras.znf.meta.gene, ctrl.znf.meta.gene)
+
+znf.draft.peak <- ggplot(znf.meta.gene, aes(dist, peaks, color = condition)) + 
+  geom_freqpoly(stat = 'identity')
+
+ifn.draft.peak / znf.draft.peak
+```
+
+## tag align on DE peaks:
+```{r}
+tag.anno.de.peaks <- read_tsv('data/tag.anno.out.txt',
+                              col_names = c('peak', 'chr', 'start', 'end', 'strand', 'score', 'focus', 'anno', 'details', 'tss.dist',
+                                            'prom.id', 'entrez.id', 'unigene', 'refseq', 'ensembl', 'gene', 'alias', 'description',
+                                            'biotype', 'kras', 'ctrl'),
+                              skip = 1)
+
+rlog.tag.anno.de.peaks <- read_tsv('data/rlog.tag.anno.out.txt',
+                              col_names = c('peak', 'chr', 'start', 'end', 'strand', 'score', 'focus', 'anno', 'details', 'tss.dist',
+                                            'prom.id', 'entrez.id', 'unigene', 'refseq', 'ensembl', 'gene', 'alias', 'description',
+                                            'biotype', 'kras', 'ctrl'),
+                              skip = 1) %>% 
+  mutate(log2FC = log2(kras/ctrl)) %>% 
+  filter(abs(log2FC) > 1)
+
+rlog.tag.anno.de.peaks %>% 
+  filter(gene %in% ifn.signature) %>% 
+  ggplot(aes(kras, ctrl, label = gene, color = biotype)) + 
+  geom_point() + 
+  geom_abline(slope = 1, intercept = 0) + 
+  facet_wrap(~biotype)
+
+rlog.tag.anno.de.peaks %>% 
+  filter(gene %in% ifn.signature) %>% 
+  ggplot(aes(kras, ctrl, label = gene, color = biotype)) + 
+  geom_point() + 
+  geom_abline(slope = 1, intercept = 0) + 
+  facet_wrap(~biotype) + 
+  geom_text_repel(aes(label = ifelse(gene == 'IFNL1', gene, '')))
+
+ggplot(tag.anno.de.peaks,
+       aes(chr)) + 
+  geom_histogram(stat = 'count')
+  
+```
+
+
