@@ -10,7 +10,7 @@ if [ $# -lt 1 ]; then
     exit 1
 fi
 
-dateStamp=$(dateStamp.sh)
+dateStamp=$(bash dateStamp.sh)
 echo "time: $dateStamp"
 
 ## activate correct env
