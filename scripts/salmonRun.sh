@@ -3,6 +3,14 @@
 # rreggiar@ucsc.edu
 # conda -- aale.analysis.env
 
+## !!install salmon via conda!!
+## $ conda config --add channels conda-forge
+## $ conda install -c bioconda salmon
+## $ salmon --version # double check you're at the current version
+
+# run salmon on trimmed fastq files to quantify abundance of transcripts against provided 
+# txome index. Resulting quant.sf files are used in DESeq
+
 scriptName=$(basename $0)
 if [ $# -lt 3 ]; then
     echo "error: usage $scriptName  directory containing trimmed *.fq.gz reads"
@@ -13,6 +21,7 @@ fi
 dateStamp="$3"
 set -x
 echo "script: $scriptName"
+salmon --version
 echo "time: $dateStamp"
 set +x 
 
