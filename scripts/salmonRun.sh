@@ -17,7 +17,7 @@ echo "time: $dateStamp"
 set +x 
 
 inputDir="$1"
-salmonIndex="$3"
+salmonIndex="$2"
 outputDir=$(basename "$salmonIndex")_${dateStamp}_out
 
 set -x
