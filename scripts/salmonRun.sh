@@ -4,14 +4,26 @@
 # conda -- aale.analysis.env
 
 scriptName=$(basename $0)
-if [ $# -lt 1 ]; then
+if [ $# -lt 2 ]; then
     echo "error: usage $scriptName  directory containing trimmed *.fq.gz reads"
-    echo "example $scriptName  /path/to/{ctrl,kras}.{1,2,3..}/salmon.out/"
+    echo "example $scriptName  /path/to/{ctrl,kras}.{1,2,3..} /path/to/{name.of.salmon.index}"
     exit 1
 fi
 
 dateStamp=$(bash dateStamp.sh)
+set -x
+echo "script: $scriptName"
 echo "time: $dateStamp"
+set +x 
+
+inputDir="$1"
+salmonIndex="$3"
+outputDir=$(basename "$salmonIndex")_${dateStamp}_out
+
+set -x
+echo "input: $inputDir"
+echo "output: $outputDir"
+set +x 
 
 ## activate correct env
 # source the conda script so this shell has access
@@ -30,15 +42,22 @@ function condaCheck() {
 }
 
 function runSalmon() {
-	if [ ! -f "$final_output_path"/quant.sf ]; then
+	inputDir="$1"
+	salmonIndex="$2"
+	outputDir="$3"
+	outputPath="$inputDir"/"$outputDir"
 
-		mkdir "$final_output_path"
+	if [ ! -f "$outputPath"/quant.sf ]; then
 
-		trim_fwd="$sample"/*output_forward_paired.fq.gz
-		trim_rev="$sample"/*output_reverse_paired.fq.gz
+		mkdir "$outputPath"
+
+		trim_fwd="$inputDir"/output_forward_paired.fq.gz
+		trim_rev="$inputDir"/output_reverse_paired.fq.gz
+
+		set -x
 
 		salmon quant \
-		-i "$salmon_index" \
+		-i "$salmonIndex" \
 		--libType A \
 		-1 "$trim_fwd" \
 		-2 "$trim_rev" \
@@ -48,9 +67,14 @@ function runSalmon() {
 		--seqBias \
 	    --recoverOrphans \
 	    --rangeFactorizationBins 4 \
-		--output "$final_output_path" 
+		--output "$outputPath" 
+
+		set +x
 
 	fi
 }
 
 condaCheck
+
+runSalmon "${inputDir}" "${salmonIndex}" "${outputDir}"
+
