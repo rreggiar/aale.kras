@@ -77,15 +77,15 @@ function runTrimmomatic() {
 	inputDir="$1"
 
 	# check for existence of canonical output file name
-	if [ ! -f "$1"/output_forward_paired.fq.gz ]; then
+	if [ ! -f "$inputDir"/output_forward_paired.fq.gz ]; then
 		# if the read files exist and are symlinks
-		if [[ -L "$1"/*_R1_001.fastq.gz ]]; then
+		if [[ -L "$inputDir"/*_R1_001.fastq.gz ]]; then
 			# assign the reads  -- prepping for move to $SCRATCH data directories
-			read_1=$(readlink *_R1_001.fastq.gz)
-			read_2=$(readlink *_R2_001.fastq.gz)
+			read_1=$(readlink "$inputDir"/*_R1_001.fastq.gz)
+			read_2=$(readlink "$inputDir"/*_R2_001.fastq.gz)
 		else
-			read_1=*_R1_001.fastq.gz
-			read_2=*_R2_001.fastq.gz
+			read_1="$inputDir"/*_R1_001.fastq.gz
+			read_2="$inputDir"/*_R2_001.fastq.gz
 		fi
 		
 		set -x
