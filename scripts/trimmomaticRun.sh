@@ -20,15 +20,15 @@ adapterPath='/public/groups/kimlab/genomes.annotations/adapters'
 # and extracellular preparations. This allows us to specify either of those as
 # a shortcut or provide a custom argument that will be checked against our
 # adapter library
-if [[ "$3" == 'intra' ]]; then
+if [[ "$2" == 'intra' ]]; then
 	adapterChoice='TruSeq3-PE.fa'
-elif [[ "$3" == 'exo' ]]; then
+elif [[ "$2" == 'exo' ]]; then
 	adapterChoice='NexteraPE-PE.fa'
 else
-	if [[ -f "$adapterPath"/"$3" ]]; then
-			adapterChoice="$3"
+	if [[ -f "$adapterPath"/"$2" ]]; then
+			adapterChoice="$2"
 	else
-		echo "you have provided an adapter file that doesn't exist (yet?): "$3""
+		echo "you have provided an adapter file that doesn't exist (yet?): "$2""
 		exit 1
 	fi
 fi
