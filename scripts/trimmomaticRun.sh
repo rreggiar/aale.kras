@@ -6,8 +6,8 @@
 # the resulting paired output files will be used for all downstream analysis
 
 scriptName=$(basename $0)
-if [ $# -lt 3 ]; then
-    echo "error: usage $scriptName  sample.input.dir adapterChoice exo"
+if [ $# -lt 2 ]; then
+    echo "error: usage $scriptName  sample.input.dir adapterChoice"
     echo "example: $scriptName /path/to/{ctrl,kras}.{1,2,3..} {exo, intra}"
     exit 1
     # rerwip: Make the outDir argument make sense for symlinked databases
