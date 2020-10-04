@@ -6,9 +6,7 @@
 scriptName=$(basename $0)
 if [ $# -lt 3 ]; then
     echo "error: usage $scriptName  directory containing trimmed *.fq.gz reads"
-    echo "example $scriptName  /path/to/{ctrl,kras}.{1,2,3..} \
-    						   /path/to/{name.of.salmon.index} \
-    							pipeline dateTime parameter"
+    echo "example $scriptName {ctrl,kras}.{1,2,3..} /path/to/{name.of.salmon.index} pipeline dateTime parameter"
     exit 1
 fi
 
@@ -28,8 +26,8 @@ echo "output: $outputDir"
 set +x 
 
 ## activate correct env
-# source the conda script so this shell has access
 function condaCheck() {
+	# source the conda script so this shell has access
 	source /public/groups/kimlab/.install_bin/anaconda3/etc/profile.d/conda.sh
 
 	reqEnv="aale.analysis.env"
