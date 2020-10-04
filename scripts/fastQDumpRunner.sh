@@ -22,16 +22,35 @@ function runner() {
 	listOfSampleId="$1"
 	for i in $listOfSampleId
 	do
-	    set -x
-	    # --gzip
-	    # fastq-dump --outdir fastq --gzip --skip-technical  --readids --read-filter pass --dumpbase --split-e --clip ${i}
+	    set -x # turn trace debug on
 
-	    # download sra file
-	    prefetch $i
+	    # sratools slow, generate errors and are hard to use
+	    # make reboust by allowing re-runs
+	    if [ ! -f "fastq/${i}_pass_1.fastq.gz" ] ;
+	    then
 
-	    # convert to fastq.gz file format
-	    fastq-dump --outdir fastq --gzip --skip-technical  --readids --read-filter pass --dumpbase --split-e --clip ${sraDir}/${i}.sra
-	    set +x
+		# download sra file
+		# do not call fastq-dump with out calling prefetch first. there is good
+		# probablity that fastq-dump connection will time out
+		prefetch $i
+		exitStatus=$?
+		if [ $? -ne 0 ];
+		then
+		    echo ERROR prefetch $i returned exit status $exitStatus
+		    continue
+		fi
+
+		# convert to fastq.gz file format
+		fastq-dump --outdir fastq --gzip --skip-technical  --readids --read-filter pass --dumpbase --split-e --clip ${sraDir}/${i}.sra
+		exitStatus=$?
+		if [ $? -ne 0 ];
+		then
+		    echo ERROR fastq-dump ${sraDir}/${i}.sra returned exit status $exitStatus
+		fi
+
+		set +x # turn trace debug off
+
+	    fi
 	done
 }
 

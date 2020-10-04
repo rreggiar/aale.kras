@@ -8,24 +8,27 @@
 
 
 export scriptName=`basename $0`
-if [ $# -lt 2 ]; then
-    echo "error: usage $scriptName phoneNumber list of sample ids"
-    echo "example $scriptName 7508622639@txt.att.net SRR10080507 SRR10080508"
+if [ $# -ne 2 ]; then
+    echo "error: usage $scriptName phoneNumber fileOfSamples"
+    echo "example $scriptName 7508622639@txt.att.net SRR_Acc_List.txt.part.ad"
+    echo "SRR_Acc_List.txt.part.ad is a list of samples"
+    echo "fileOfSample creation example: 'split -l 100 SRR_Acc_List.txt SRR_Acc_List.txt.part.' "
     exit 1
 fi
 
 
 # use export else variable will not be defined by inline script embedded in nohup
 export phoneNumber=$1
-export listOfSamples=${@:2}
+export fileOfSamples=$2
+export listOfSamples=`cat ${fileOfSamples}`
 export dateStamp=`dateStamp.sh`
 
 set -x
 which fastQDumpRunner.sh
 nohup sh -c 'set -x; \
 	time fastQDumpRunner.sh ${listOfSamples} ; \
-	dataIsUpSMS.sh $phoneNumber $scriptName exit status: $? ' \
-   2>&1 > $scriptName.${dateStamp}.out &
+	dataIsUpSMS.sh $phoneNumber $scriptName $fileOfSamples exit status: $? ' \
+   2>&1 > $scriptName.${fileOfSamples}.${dateStamp}.out &
 
 
 
