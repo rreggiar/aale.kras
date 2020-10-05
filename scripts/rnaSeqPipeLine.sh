@@ -5,13 +5,13 @@
 
 
 scriptName=$(basename $0)
-if [ $# -lt 7 ]; then
+if [ $# -lt 6 ]; then
     echo "error: usage $scriptName trim=T salmon=T star=T inputDir salmonIndex starGenome adapterChoice "
     echo "example $scriptName "
     exit 1
 fi
 
-modules=('trimmomaticRun.sh' 'salmonRun.sh' 'starRun.sh')
+modules=(trimmomaticRun.sh salmonRun.sh starRun.sh)
 
 for module in modules; do
 	if [[ -f "$module" ]]; then
