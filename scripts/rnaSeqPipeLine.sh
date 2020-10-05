@@ -11,9 +11,7 @@ if [ $# -lt 6 ]; then
     exit 1
 fi
 
-modules=(trimmomaticRun.sh salmonRun.sh starRun.sh)
-
-for module in modules; do
+for module in trimmomaticRun.sh salmonRun.sh starRun.sh; do
 	if [[ -f "$module" ]]; then
 		echo "$module" "is present"
 	else
