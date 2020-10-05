@@ -13,8 +13,8 @@
 
 scriptName=$(basename $0)
 if [ $# -lt 3 ]; then
-    echo "error: usage $scriptName  directory containing trimmed *.fq.gz reads"
-    echo "example $scriptName {ctrl,kras}.{1,2,3..} /path/to/{name.of.salmon.index} pipeline dateTime parameter"
+    echo "error: usage $scriptName inputDir salmonIndex dateStamp"
+    echo "example $scriptName {ctrl,kras}.{1,2,3..} /path/to/{name.of.salmon.index} pipeline_dateStamp"
     exit 1
 fi
 
@@ -35,6 +35,10 @@ echo "output: $outputDir"
 set +x 
 
 ## activate correct env
+# this will only run if you happen to be in the wrong env
+# I think using directories as envNames could make this moot
+# OR allow us to rely on "$(basename $PWD)" as $reqENV which would make the check
+# super portable
 function condaCheck() {
 	# source the conda script so this shell has access
 	source /public/groups/kimlab/.install_bin/anaconda3/etc/profile.d/conda.sh

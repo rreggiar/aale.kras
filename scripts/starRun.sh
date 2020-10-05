@@ -14,7 +14,8 @@
 scriptName=$(basename $0)
 if [ $# -lt 5 ]; then
     echo "error: usage $scriptName inputDir 2pass={T/F} edit={T/F} starGenome dateStamp"
-    echo "example $scriptName {ctrl,kras}.{1,2,3..} /path/to/{name.of.salmon.index} pipeline dateTime parameter"
+    echo "example $scriptName {ctrl,kras}.{1,2,3..} /path/to/{name.of.star.genome} 2pass=F edit=T dateTime"
+    echo "note: 2pass mode requires access to the entire experiments first pass output, should not be run until that has been generated"
     exit 1
 fi
 
