@@ -20,11 +20,11 @@ if [ $# -lt 5 ]; then
 fi
 
 dateStamp="$5"
-set -x
+#set -x
 echo "script: $scriptName"
 echo "STAR version:" $(STAR --version)
 echo "time: $dateStamp"
-set +x 
+#set +x 
 
 inputDir="$1"
 twoPassArg="$2"
@@ -34,11 +34,11 @@ firstPassDir="$inputDir"/$(basename "$starGenome")_${dateStamp}_star_out
 rnaEditDir="$inputDir"/rna_editing_$(basename "$starGenome")_${dateStamp}_star_out
 secondPassDir=$firstPassDir/second_pass_out
 
-set -x
+#set -x
 echo "input:" "$inputDir"
 echo "firstPassDir:" "$firstPassDir"
 echo "secondPassDir:" "$secondPassDir"
-set +x 
+#set +x 
 
 ## activate correct env
 function condaCheck() {
@@ -69,11 +69,11 @@ function runStarFirstPass() {
 		trim_rev="$inputDir"/output_reverse_paired.fq.gz
 
         STAR --genomeDir "$starGenome" \
-        --readFilesIn <(gunzip -c "$trim_fwd") <(gunzip -c "$trim_rev") \
-        --runThreadN 8 \
-        --outMultimapperOrder Random \
-        --outFilterMultimapNmax 50 \
-        --outfileNamePrefix "$firstPassDir"/ 
+	        --readFilesIn <(gunzip -c "$trim_fwd") <(gunzip -c "$trim_rev") \
+	        --runThreadN 8 \
+	        --outMultimapperOrder Random \
+	        --outFilterMultimapNmax 50 \
+	        --outfileNamePrefix "$firstPassDir"/ 
 
     fi
 }
@@ -86,6 +86,8 @@ function runStarSecondPass() {
 
 	cd "$inputDir"
 	cd ../
+
+	# starMasterDir == "$inputDir"/..
 
 	starMasterDir=$PWD
 
@@ -101,14 +103,14 @@ function runStarSecondPass() {
 			trim_rev="$inputSample"/output_reverse_paired.fq.gz
 
 		    STAR --genomeDir "$starGenome" \
-		    --readFilesIn <(gunzip -c "$trim_fwd") <(gunzip -c "$trim_rev") \
-		    --runThreadN 8 \
-		    --sjdbFileChrStartEnd "$starMasterDir"/*/star.out/SJ.out.tab \
-		    --outFilterMultimapNmax 50 \
-		    --outReadsUnmapped Fastx \
-		    --outMultimapperOrder Random \
-		    --outSAMtype BAM SortedByCoordinate \
-		    --outfileNamePrefix "$secondPassDir"/
+			    --readFilesIn <(gunzip -c "$trim_fwd") <(gunzip -c "$trim_rev") \
+			    --runThreadN 8 \
+			    --sjdbFileChrStartEnd "$starMasterDir"/*/*_star_out/SJ.out.tab \
+			    --outFilterMultimapNmax 50 \
+			    --outReadsUnmapped Fastx \
+			    --outMultimapperOrder Random \
+			    --outSAMtype BAM SortedByCoordinate \
+			    --outfileNamePrefix "$secondPassDir"/
 		fi
 
 }
@@ -126,10 +128,10 @@ function runStarForRNAEditing() {
 		trim_rev="$inputDir"/output_reverse_paired.fq.gz
 
         STAR --genomeDir $starGenome \
-        --readFilesIn <(gunzip -c $trim1) <(gunzip -c $trim2) \
-        --outFilterMatchNminOverLread 0.95 \
-        --outSAMtype BAM SortedByCoordinate \
-        --outfileNamePrefix "$rnaEditDir"/
+	        --readFilesIn <(gunzip -c $trim1) <(gunzip -c $trim2) \
+	        --outFilterMatchNminOverLread 0.95 \
+	        --outSAMtype BAM SortedByCoordinate \
+	        --outfileNamePrefix "$rnaEditDir"/
 
     fi   
 }

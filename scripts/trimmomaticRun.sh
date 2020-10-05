@@ -48,10 +48,10 @@ fi
 
 inputDir="$1"
 
-set -x
+#set -x
 echo "input: $inputDir"
 echo "trimmomatic:" $(trimmomatic -version)
-set +x 
+#set +x 
 
 ## activate correct env
 # this will only run if you happen to be in the wrong env
@@ -101,16 +101,16 @@ function runTrimmomatic() {
 
 		# run trimm with recommended arguments
 		trimmomatic PE  -threads 8 \
-		"$read_1" "$read_2" \
-		output_forward_paired.fq.gz \
-		output_forward_unpaired.fq.gz \
-		output_reverse_paired.fq.gz \
-		output_reverse_unpaired.fq.gz \
-		ILLUMINACLIP:"$adapters"/"$lib_choice":1:30:10:4:true \
-		LEADING:3 \
-		TRAILING:3 \
-		SLIDINGWINDOW:4:15 \
-		MINLEN:36
+			"$read_1" "$read_2" \
+			output_forward_paired.fq.gz \
+			output_forward_unpaired.fq.gz \
+			output_reverse_paired.fq.gz \
+			output_reverse_unpaired.fq.gz \
+			ILLUMINACLIP:"$adapters"/"$adapterChoice":1:30:10:4:true \
+			LEADING:3 \
+			TRAILING:3 \
+			SLIDINGWINDOW:4:15 \
+			MINLEN:36
 		set +x
 
 	fi
@@ -118,5 +118,5 @@ function runTrimmomatic() {
 
 condaCheck
 
-runTrimmomatic "${inputDir}"
+runTrimmomatic "${inputDir}" # specify file path
 
