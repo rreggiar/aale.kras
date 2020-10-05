@@ -2,6 +2,12 @@
 
 # rreggiar@ucsc.edu
 # conda -- aale.analysis.env
+
+## !!install Trimmomatic via conda!!
+## $ conda config --add channels conda-forge
+## $ conda install -c bioconda trimmomatic
+## $ trimmomatic -version # double check you're at the current version
+
 # run trimmomatic to remove adapter sequences from the ends of reads
 # the resulting paired output files will be used for all downstream analysis
 
@@ -44,7 +50,7 @@ inputDir="$1"
 
 set -x
 echo "input: $inputDir"
-echo "trimmomatic: $(trimmomatic -version)"
+echo "trimmomatic:" $(trimmomatic -version)
 set +x 
 
 ## activate correct env

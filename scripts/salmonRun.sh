@@ -21,7 +21,7 @@ fi
 dateStamp="$3"
 set -x
 echo "script: $scriptName"
-salmon --version
+echo "salmon version:" $(salmon --version)
 echo "time: $dateStamp"
 set +x 
 
