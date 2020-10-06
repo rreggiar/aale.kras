@@ -40,4 +40,4 @@ for inputDir in "$sampleDir"/*; do
 
 done
 
-multiqc "$sampleDir" --ignore *.fastq.gz --filename multiqc."${dateStamp}" -o "$sampleDir"
+multiqc "$sampleDir" --filename multiqc."${dateStamp}" -o "$sampleDir"
