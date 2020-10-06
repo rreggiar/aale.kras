@@ -4,7 +4,7 @@
 
 
 scriptName=$(basename $0)
-if [ $# -lt 3 ]; then
+if [ $# -lt 1 ]; then
     echo "error: usage "$scriptName" sampleDir"
     echo "example "$scriptName" /scratch/kimlab/projects/exoRNA-biomarkers-panc/data/a549_0.2MOI_24hr"
     exit 1
