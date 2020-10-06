@@ -76,7 +76,7 @@ function runSalmon() {
 			salmon quant \
 				-i "$salmonIndex" \
 				--libType A \
-				-r "$read" \
+				-r "$trim_read" \
 				-p 8 \
 				--validateMappings \
 				--gcBias \
