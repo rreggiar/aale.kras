@@ -84,7 +84,7 @@ function runTrimmomatic() {
 	inputDir="$1"
 
 	# check for existence of canonical output file name
-	if [[ ! -f "$inputDir"/output_forward_paired.fq.gz ]]; then
+	if [[ ! -f "$inputDir"/$(basename "$inputDir")_output_forward_paired.fq.gz ]]; then
 		# look for second paired read, if that exists approach as paired library
 		if [ -f "$inputDir"/*_2*.fastq.gz ]; then
 			#statements
@@ -106,10 +106,10 @@ function runTrimmomatic() {
 			# run trimm with recommended arguments
 			trimmomatic PE  -threads 8 \
 				"$read_1" "$read_2" \
-				"$inputDir"/output_forward_paired.fq.gz \
-				"$inputDir"/output_forward_unpaired.fq.gz \
-				"$inputDir"/output_reverse_paired.fq.gz \
-				"$inputDir"/output_reverse_unpaired.fq.gz \
+				"$inputDir"/$(basename "$inputDir")_output_forward_paired.fq.gz \
+				"$inputDir"/$(basename "$inputDir")_output_forward_unpaired.fq.gz \
+				"$inputDir"/$(basename "$inputDir")_output_reverse_paired.fq.gz \
+				"$inputDir"/$(basename "$inputDir")_output_reverse_unpaired.fq.gz \
 				ILLUMINACLIP:"$adapters"/"$adapterChoice":1:30:10:4:true \
 				LEADING:3 \
 				TRAILING:3 \
@@ -117,14 +117,14 @@ function runTrimmomatic() {
 				MINLEN:36
 
 			exitStatus=$?
-			if [ $? -ne 0 ]; then
+			if [ "$exitStatus" -ne 0 ]; then
 
 			    echo ERROR trimmomatic "$inputDir" returned exit status "$exitStatus"
 			    continue
 
 			fi
 
-		elif [[ ! -f "$inputDir"/output_single_end.fq.gz ]]; then
+		elif [[ ! -f "$inputDir"/$(basename "$inputDir")_output_single_end.fq.gz ]]; then
 			#statements
 			# if read-pair not found, use single end arguments
 
@@ -145,7 +145,7 @@ function runTrimmomatic() {
 			# run trimm with recommended arguments
 			trimmomatic SE  -threads 8 \
 				"$read_1"  \
-				"$inputDir"/output_single_end.fq.gz \
+				"$inputDir"/$(basename "$inputDir")_output_single_end.fq.gz \
 				ILLUMINACLIP:"$adapters"/"$adapterChoice":1:30:10:4:true \
 				LEADING:3 \
 				TRAILING:3 \
@@ -154,7 +154,7 @@ function runTrimmomatic() {
 
 
 			exitStatus=$?
-			if [ $? -ne 0 ]; then
+			if [ "$exitStatus" -ne 0 ]; then
 
 			    echo ERROR trimmomatic "$inputDir" returned exit status "$exitStatus"
 			    continue

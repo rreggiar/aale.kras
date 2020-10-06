@@ -20,7 +20,7 @@ cmdList="$@"
 echo "cmd: "$cmdList""
 
 
-fastqc -t 8 "$sampleDir"/*/*.fq.gz
+fastqc -t 8 "$sampleDir"/*/*.fq.gz:
 
 # for inputDir in "$sampleDir"/*; do
 
