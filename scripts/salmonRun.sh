@@ -85,6 +85,16 @@ function runSalmon() {
 			    --rangeFactorizationBins 4 \
 				--output "$outputPath" 
 
+			exitStatus=$?
+			if [ $? -ne 0 ]; then
+
+			    echo ERROR salmon "$inputDir" returned exit status "$exitStatus"
+			    continue
+
+			fi
+
+			set +x
+
 		else
 
 			trim_fwd="$inputDir"/output_forward_paired.fq.gz
@@ -112,10 +122,9 @@ function runSalmon() {
 
 			fi
 
-	fi
-
-	set +x
-}
+			set +x
+		fi
+	fi }
 
 # condaCheck
 
