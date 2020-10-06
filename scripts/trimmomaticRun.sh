@@ -127,12 +127,12 @@ function runTrimmomatic() {
 		else
 			# if read-pair not found, use single end arguments
 
-			if [[ -L "$inputDir"/*_1*.fastq.gz ]]; then
+			if [[ -L "$inputDir"/*_1.fastq.gz ]]; then
 				# assign the reads  -- prepping for move to $SCRATCH data directories
-				read_1=$(readlink "$inputDir"/*_R1_001.fastq.gz)
+				read_1=$(readlink "$inputDir"/*_1.fastq.gz)
 				#read_2=$(readlink "$inputDir"/*_R2_001.fastq.gz)
 			else
-				read_1="$inputDir"/*_1*.fastq.gz
+				read_1="$inputDir"/*_1.fastq.gz
 				#read_2="$inputDir"/*_2*.fastq.gz
 			fi
 			
