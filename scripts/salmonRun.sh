@@ -29,7 +29,7 @@ echo "salmon version:" $(salmon --version)
 
 inputDir="$1"
 salmonIndex="$2"
-outputDir=$(basename "$salmonIndex")_${dateStamp}_out
+outputDir=$(basename "$salmonIndex")_"$dateStamp"_out
 
 # set -x
 echo "input: $inputDir"
@@ -121,10 +121,12 @@ function runSalmon() {
 			    continue
 
 			fi
-
-			set +x
 		fi
-	fi }
+
+		set +x
+		
+	fi 
+}
 
 # condaCheck
 

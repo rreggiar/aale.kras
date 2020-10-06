@@ -84,7 +84,7 @@ function runTrimmomatic() {
 	inputDir="$1"
 
 	# check for existence of canonical output file name
-	if [[ ! -f "$inputDir"/output_forward_paired.fq.gz || ! -f "$inputDir"/output_single_end.fq.gz ]]; then
+	if [[ ! -f "$inputDir"/output_forward_paired.fq.gz ]]; then
 		# look for second paired read, if that exists approach as paired library
 		if [ -f "$inputDir"/*_2*.fastq.gz ]; then
 			#statements
@@ -124,7 +124,8 @@ function runTrimmomatic() {
 
 			fi
 
-		else
+		elif [[ ! -f "$inputDir"/output_single_end.fq.gz ]]; then
+			#statements
 			# if read-pair not found, use single end arguments
 
 			if [ -L "$inputDir"/*_1.fastq.gz ]; then
