@@ -20,9 +20,9 @@ fi
 
 dateStamp="$3"
 # set -x
-echo "script: $scriptName"
+echo "cmd: "$@""
 echo "salmon version:" $(salmon --version)
-echo "time: $dateStamp"
+# echo "time: $dateStamp"
 # set +x 
 
 # echo $@ -- print everything from cmdline
@@ -41,20 +41,20 @@ echo "output: $outputDir"
 # I think using directories as envNames could make this moot
 # OR allow us to rely on "$(basename $PWD)" as $reqENV which would make the check
 # super portable
-function condaCheck() {
-	# source the conda script so this shell has access
-	source /public/groups/kimlab/.install_bin/anaconda3/etc/profile.d/conda.sh
+# function condaCheck() {
+# 	# source the conda script so this shell has access
+# 	source /public/groups/kimlab/.install_bin/anaconda3/etc/profile.d/conda.sh
 
-	reqEnv="aale.analysis.env"
-	env=$(basename "$CONDA_PREFIX")
+# 	reqEnv="aale.analysis.env"
+# 	env=$(basename "$CONDA_PREFIX")
 
-	if [[ env != reqEnv ]]; then
-		echo "switching from "$env" to "$reqEnv""
-		conda activate $reqEnv
-	else
-		echo ""$reqEnv" is active"
-	fi
-}
+# 	if [[ env != reqEnv ]]; then
+# 		echo "switching from "$env" to "$reqEnv""
+# 		conda activate $reqEnv
+# 	else
+# 		echo ""$reqEnv" is active"
+# 	fi
+# }
 
 function runSalmon() {
 	# runs salmon on one sample and outputs to that directory
@@ -62,44 +62,62 @@ function runSalmon() {
 	salmonIndex="$2"
 	outputDir="$3"
 	outputPath="$inputDir"/"$outputDir"
+	
+	set -x
 
-	if [ ! -f "$outputPath"/quant.sf ]; then
+	if [[ ! -f "$outputPath"/quant.sf ]]; then
 
 		mkdir "$outputPath"
 
-		trim_fwd="$inputDir"/output_forward_paired.fq.gz
-		trim_rev="$inputDir"/output_reverse_paired.fq.gz
+		if [[ -f "$inputDir"/output_single_end.fq.gz ]]; then
 
-		set -x
+			trim_read="$inputDir"/output_single_end.fq.gz
 
-		salmon quant \
-			-i "$salmonIndex" \
-			--libType A \
-			-1 "$trim_fwd" \
-			-2 "$trim_rev" \
-			-p 8 \
-			--validateMappings \
-			--gcBias \
-			--seqBias \
-		    --recoverOrphans \
-		    --rangeFactorizationBins 4 \
-			--output "$outputPath" 
+			salmon quant \
+				-i "$salmonIndex" \
+				--libType A \
+				-r "$read" \
+				-p 8 \
+				--validateMappings \
+				--gcBias \
+				--seqBias \
+			    --recoverOrphans \
+			    --rangeFactorizationBins 4 \
+				--output "$outputPath" 
 
-		exitStatus=$?
-		if [ $? -ne 0 ]; then
+		else
 
-		    echo ERROR salmon "$inputDir" returned exit status "$exitStatus"
-		    continue
+			trim_fwd="$inputDir"/output_forward_paired.fq.gz
+			trim_rev="$inputDir"/output_reverse_paired.fq.gz
 
-		fi
 
-		set +x
+			salmon quant \
+				-i "$salmonIndex" \
+				--libType A \
+				-1 "$trim_fwd" \
+				-2 "$trim_rev" \
+				-p 8 \
+				--validateMappings \
+				--gcBias \
+				--seqBias \
+			    --recoverOrphans \
+			    --rangeFactorizationBins 4 \
+				--output "$outputPath" 
 
+			exitStatus=$?
+			if [ $? -ne 0 ]; then
+
+			    echo ERROR salmon "$inputDir" returned exit status "$exitStatus"
+			    continue
+
+			fi
 
 	fi
+
+	set +x
 }
 
-condaCheck
+# condaCheck
 
 runSalmon "${inputDir}" "${salmonIndex}" "${outputDir}"
 
