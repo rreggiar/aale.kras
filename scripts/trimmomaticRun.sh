@@ -142,10 +142,9 @@ function runTrimmomatic() {
 			echo "Trimming fastq"
 
 			# run trimm with recommended arguments
-			trimmomatic PE  -threads 8 \
+			trimmomatic SE  -threads 8 \
 				"$read_1"  \
-				"$inputDir"/output_forward_paired.fq.gz \
-				"$inputDir"/output_forward_unpaired.fq.gz \
+				"$inputDir"/output_single_end.fq.gz \
 				ILLUMINACLIP:"$adapters"/"$adapterChoice":1:30:10:4:true \
 				LEADING:3 \
 				TRAILING:3 \
