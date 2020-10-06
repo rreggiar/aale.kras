@@ -1,7 +1,8 @@
 #!/bin/bash
 
 # rreggiar@ucsc.edu
-
+# runs quick (hopefully) qc on fastq files (pref. trimmed to ensure success of adapter trimming)
+# use multiqc output to assess; will aggregate into a nice webpage
 
 scriptName=$(basename $0)
 if [ $# -lt 1 ]; then
@@ -20,20 +21,23 @@ for inputDir in "$sampleDir"/*; do
 
 	cd $inputDir
 
-	set -x 
+	if [ ! -f *_fastqc.html ]; then
 
-	fastqc -t 8 *.fq.gz
+		set -x 
 
-	exitStatus=$?
-	if [ $? -ne 0 ]; then
+		fastqc -t 8 *.fq.gz
 
-	    echo ERROR "$scriptName" "$inputDir" returned exit status "$exitStatus"
-	    continue
+		exitStatus=$?
+		if [ $? -ne 0 ]; then
 
+		    echo ERROR "$scriptName" "$inputDir" returned exit status "$exitStatus"
+		    continue
+
+		fi
+
+		set +x
 	fi
-
-	set +x
 
 done
 
-multiqc "$sampleDir" --ignore *.fastq.gz --filename multiqc."${dateStamp}" -outdir "$sampleDir"
+multiqc "$sampleDir" --ignore *.fastq.gz --filename multiqc."${dateStamp}" -o "$sampleDir"
