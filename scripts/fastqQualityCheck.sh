@@ -15,29 +15,36 @@ sampleDir="$1"
 
 dateStamp="$(bash dateStamp.sh)"
 
-echo "cmd: "$@""
+cmdList="$@"
 
-for inputDir in "$sampleDir"/*; do
+echo "cmd: "$cmdList""
 
-	cd $inputDir
 
-	if [ ! -f *_fastqc.html ]; then
+fastqc -t 8 "$sampleDir"/*/*.fq.gz
 
-		set -x 
+# for inputDir in "$sampleDir"/*; do
 
-		fastqc -t 8 *.fq.gz
+# 	cd $inputDir
 
-		exitStatus=$?
-		if [ $? -ne 0 ]; then
+# 	if [ ! -f *_fastqc.html ]; then
 
-		    echo ERROR "$scriptName" "$inputDir" returned exit status "$exitStatus"
-		    continue
+# 		set -x 
 
-		fi
+# 		fastqc -t 8 *.fq.gz
 
-		set +x
-	fi
+# 		rename
 
-done
+# 		exitStatus=$?
+# 		if [ $? -ne 0 ]; then
+
+# 		    echo ERROR "$scriptName" "$inputDir" returned exit status "$exitStatus"
+# 		    continue
+
+# 		fi
+
+# 		set +x
+# 	fi
+
+# done
 
 multiqc "$sampleDir" --filename multiqc."${dateStamp}" -o "$sampleDir"
