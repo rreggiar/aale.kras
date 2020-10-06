@@ -18,9 +18,11 @@ echo "cmd: "$@""
 
 for inputDir in "$sampleDir"/*; do
 
+	cd $inputDir
+
 	set -x 
 
-	fastqc -t 8 output*
+	fastqc -t 8 "output_*.fq.gz"
 
 	exitStatus=$?
 	if [ $? -ne 0 ]; then
