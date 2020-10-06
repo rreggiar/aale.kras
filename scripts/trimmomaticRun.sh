@@ -102,15 +102,24 @@ function runTrimmomatic() {
 		# run trimm with recommended arguments
 		trimmomatic PE  -threads 8 \
 			"$read_1" "$read_2" \
-			output_forward_paired.fq.gz \
-			output_forward_unpaired.fq.gz \
-			output_reverse_paired.fq.gz \
-			output_reverse_unpaired.fq.gz \
+			"$inputDir"/output_forward_paired.fq.gz \
+			"$inputDir"/output_forward_unpaired.fq.gz \
+			"$inputDir"/output_reverse_paired.fq.gz \
+			"$inputDir"/output_reverse_unpaired.fq.gz \
 			ILLUMINACLIP:"$adapters"/"$adapterChoice":1:30:10:4:true \
 			LEADING:3 \
 			TRAILING:3 \
 			SLIDINGWINDOW:4:15 \
 			MINLEN:36
+
+		exitStatus=$?
+		if [ $? -ne 0 ]; then
+
+		    echo ERROR trimmomatic "$inputDir" returned exit status "$exitStatus"
+		    continue
+
+		fi	
+
 		set +x
 
 	fi

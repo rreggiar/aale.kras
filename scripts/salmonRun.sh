@@ -85,12 +85,13 @@ function runSalmon() {
 		    --rangeFactorizationBins 4 \
 			--output "$outputPath" 
 
-		#exitStatus=$?
-		#if [ $? -ne 0 ];
-		#then
-		#    echo ERROR salmon $i returned exit status $exitStatus
-		#    continue
-		#fi
+		exitStatus=$?
+		if [ $? -ne 0 ]; then
+
+		    echo ERROR salmon "$inputDir" returned exit status "$exitStatus"
+		    continue
+
+		fi
 
 		set +x
 
