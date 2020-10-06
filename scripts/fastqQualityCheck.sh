@@ -22,7 +22,7 @@ for inputDir in "$sampleDir"/*; do
 
 	set -x 
 
-	fastqc -t 8 "output_*.fq.gz"
+	fastqc -t 8 *.fq.gz
 
 	exitStatus=$?
 	if [ $? -ne 0 ]; then
@@ -36,4 +36,4 @@ for inputDir in "$sampleDir"/*; do
 
 done
 
-multiqc "$sampleDir" --ingore *.fastq.gz --filename multiqc."${dateStamp}" -outdir "$sampleDir"
+multiqc "$sampleDir" --ignore *.fastq.gz --filename multiqc."${dateStamp}" -outdir "$sampleDir"
