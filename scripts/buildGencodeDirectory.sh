@@ -49,7 +49,7 @@ gencodeLncRNATranscriptFA="ftp://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_hum
 ucscRmskInsertFA="/public/groups/kimlab/genomes.annotations/formatted.UCSC.gb.rmsk.insert.fa"
 
 # generate destination directory
-if [ -d "$outputDir"]; then
+if [ -d "$outputDir" ]; then
 
 	set -x
 	mkdir "$outputDir"
