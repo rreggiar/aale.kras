@@ -61,7 +61,7 @@ fi
 ln -s "$ucscRmskInsertFA" "$outputDir"
 
 # for succint iteration
-dataGenerationList=(gencodeAnnotationGTF gencodeTransctiptFA gencodePrimaryAssemblyFA gencodeLncRNATranscriptFA)
+dataGenerationList=("$gencodeAnnotationGTF" "$gencodeTransctiptFA" "$gencodePrimaryAssemblyFA" "$gencodeLncRNATranscriptFA")
 
 function downloadDataSets(){
 
