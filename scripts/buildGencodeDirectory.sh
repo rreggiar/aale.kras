@@ -43,8 +43,8 @@ outputDir="$kimlabGenomesDir"/"gencode.""$version"
 
 # gencode-format for FTP download, they keep everything nice and regular just modifying the version number
 gencodeAnnotationGTF="ftp://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_"$version"/gencode.v"$version".annotation.gtf.gz"
-gencodeTransctiptFA="ftp://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_"$version"/gencode.v"$version".transcripts.fa.gz"
-gencodePrimaryAssemblyFA="ftp://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_"$version"/gencode.v"$version".transcripts.fa.gz"
+gencodeTranscriptFA="ftp://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_"$version"/gencode.v"$version".transcripts.fa.gz"
+gencodePrimaryAssemblyFA="ftp://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_"$version"/GRCh38.primary_assembly.genome.fa.gz"
 gencodeLncRNATranscriptFA="ftp://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_"$version"/gencode.v"$version".lncRNA_transcripts.fa.gz"
 ucscRmskInsertFA="/public/groups/kimlab/genomes.annotations/formatted.UCSC.gb.rmsk.insert.fa"
 
@@ -61,7 +61,7 @@ fi
 ln -s "$ucscRmskInsertFA" "$outputDir"
 
 # for succint iteration
-dataGenerationList=("$gencodeAnnotationGTF" "$gencodeTransctiptFA" "$gencodePrimaryAssemblyFA" "$gencodeLncRNATranscriptFA")
+dataGenerationList=("$gencodeAnnotationGTF" "$gencodeTranscriptFA" "$gencodePrimaryAssemblyFA" "$gencodeLncRNATranscriptFA")
 
 function downloadDataSets(){
 
