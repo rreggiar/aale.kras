@@ -57,7 +57,7 @@ if [ -d "$outputDir" ]; then
 
 fi
 
-# symlink in the rmsk reference
+# symlink in the rmsk reference -- ln won't overwrite by default
 ln -s "$ucscRmskInsertFA" "$outputDir"
 
 # for succint iteration
@@ -85,13 +85,13 @@ function downloadDataSets(){
 }
 
 
-function createTxToGene(){
+# function createTxToGene(){
 
-}
+# }
 
 
 
-downloadDataSets "${dataGenerationList}"
+downloadDataSets "$dataGenerationList"
 
 
 
