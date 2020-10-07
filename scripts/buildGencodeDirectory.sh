@@ -68,7 +68,7 @@ function downloadDataSets(){
 	dataGenerationList="$1"
 
 	# non-redundant download of necc. data for annotation directory construction
-	for targetData in dataGenerationList; do
+	for targetData in "$dataGenerationList"; do
 
 		destinationPath="$outputDir"/"$(basename "$targetData")"
 
@@ -83,12 +83,6 @@ function downloadDataSets(){
 	done
 
 }
-
-
-# function createTxToGene(){
-
-# }
-
 
 
 downloadDataSets "$dataGenerationList"
