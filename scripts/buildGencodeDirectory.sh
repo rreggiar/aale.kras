@@ -39,7 +39,7 @@ echo "$scriptName" "$command"
 kimlabGenomesDir="/public/groups/kimlab/genomes.annotations"
 kimlabIndexDir="/public/groups/kimlab/indexes"
 version="$1"
-outputDir="$kimlabGenomesDir"/"gencode.v""$version"
+outputDir="$kimlabGenomesDir"/"gencode.""$version"
 
 # gencode-format for FTP download, they keep everything nice and regular just modifying the version number
 gencodeAnnotationGTF="ftp://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_"$version"/gencode.v"$version".annotation.gtf.gz"
@@ -49,7 +49,7 @@ gencodeLncRNATranscriptFA="ftp://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_hum
 ucscRmskInsertFA="/public/groups/kimlab/genomes.annotations/formatted.UCSC.gb.rmsk.insert.fa"
 
 # generate destination directory
-if [ -d "$outputDir" ]; then
+if [ ! -d "$outputDir" ]; then
 
 	set -x
 	mkdir "$outputDir"
