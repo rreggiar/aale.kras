@@ -235,7 +235,7 @@ function makeSalmonIndexes(){
 
 			if [ -d "$kimlabIndexDir"/"sel.align.gencode.v""$version"".process.aware.salmon.v""$salmonVersion"".sidx" ]; then
 
-				echo "$outputDir" | Rscript generateLinkedTxome.R
+				echo "$outputDir" "$salmonVersion" | Rscript generateLinkedTxome.R
 			fi
 
 		fi
