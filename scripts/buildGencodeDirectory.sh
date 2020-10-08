@@ -69,7 +69,10 @@ dataGenerationList=("$gencodeAnnotationGTF" "$gencodeTranscriptFA" "$gencodePrim
 
 function downloadDataSets(){
 
+	# acquire the fastas and gtfs associated with this release of GENCODE (see links at top)
+
 	dataGenerationList="$1"
+	outputDir="$2"
 
 	# non-redundant download of necc. data for annotation directory construction
 	for targetData in "${dataGenerationList[@]}"; do
@@ -91,7 +94,7 @@ function downloadDataSets(){
 function makeTx2Gene(){
 
 	# parse the fasta headers into tx (long meta data) and gene (just column 6 of the meta data)
-	# combine into a csv
+	# combine into a csv where [tx, gene]
 
 	gencodeTranscriptFA="$1"
 	ucscRmskInsertTx2GeneCSV="$2"
@@ -127,6 +130,8 @@ function makeSalmonDecoys(){
 	# but modifying the indexing step slightly
 
 	# passes the entire genome as the decoy for transcript quantification adjustment
+	# just need the names of the chromosomes, contigs in a text file such that they match
+	# the headers in the genome assembly fasta
 
 	version="$1"
 	outputDir="$2"
@@ -174,7 +179,7 @@ function makeSalmonIndexes(){
 	# can be used by `salmon quant` moving forward
 
 	## 1. standard gencode index
-	## 2. gencode + TE insertions index
+	## 2. gencode + TE insertions index -- this is just a concatentation of the two FASTAs
 	## 3. process-aware (intron/exon) gencode index
 
 	if [ ! -x "$(command -v salmon)" ]; then
@@ -246,7 +251,7 @@ function makeSalmonIndexes(){
 
 }
 
-downloadDataSets "$dataGenerationList"
+downloadDataSets "$dataGenerationList" "$outputDir"
 
 makeTx2Gene "$gencodeTranscriptFA" "$ucscRmskInsertTx2GeneCSV" "$outputDir"
 
