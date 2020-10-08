@@ -47,6 +47,7 @@ gencodeTranscriptFA="ftp://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/rel
 gencodePrimaryAssemblyFA="ftp://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_"$version"/GRCh38.primary_assembly.genome.fa.gz"
 gencodeLncRNATranscriptFA="ftp://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_"$version"/gencode.v"$version".lncRNA_transcripts.fa.gz"
 ucscRmskInsertFA="/public/groups/kimlab/genomes.annotations/formatted.UCSC.gb.rmsk.insert.fa"
+ucscRmskInsertTx2GeneCSV="/public/groups/kimlab/genomes.annotations/formatted.UCSC.gb.rmsk.insert.tx.to.gene.csv"
 
 # generate destination directory
 if [ ! -d "$outputDir" ]; then
@@ -59,6 +60,8 @@ fi
 
 # symlink in the rmsk reference -- ln won't overwrite by default
 ln -s "$ucscRmskInsertFA" "$outputDir"
+# and the rmsk tx2gene
+ln -s "$ucscRmskInsertTx2GeneCSV" "$outputDir"
 
 # for succint iteration
 dataGenerationList=("$gencodeAnnotationGTF" "$gencodeTranscriptFA" "$gencodePrimaryAssemblyFA" "$gencodeLncRNATranscriptFA")
@@ -84,16 +87,127 @@ function downloadDataSets(){
 
 }
 
+function makeTx2Gene(){
+
+	gencodeTranscriptFA="$1"
+	ucscRmskInsertTx2GeneCSV="$2"
+	outputDir="$3"
+
+	set -x
+
+	# gencode tx names
+	if [ ! -f "$outputDir"/"gencode.v"$version".transcript.names.txt" ]; then
+		zcat "$outputDir"/"$(basename "$gencodeTranscriptFA")" | grep '>' | cut -d'>' -f2 > "$outputDir"/"gencode.v"$version".transcript.names.txt"
+	fi	
+	# gene names
+	if [ ! -f "$outputDir"/"gencode.v"$version".gene.names.txt" ]; then
+		cut -d'|' -f6 "$outputDir"/"gencode.v"$version".transcript.names.txt" > "$outputDir"/"gencode.v"$version".gene.names.txt"
+	fi
+	# tx to gene
+	if [ ! -f "$outputDir"/"gencode.v"$version".tx.to.gene.csv" ]; then
+		paste -d, "$outputDir"/"gencode.v"$version".transcript.names.txt" "$outputDir"/"gencode.v"$version".gene.names.txt" > "$outputDir"/"gencode.v"$version".tx.to.gene.csv"
+	fi
+	# gencode + rmsk tx.2.gene
+	if [ ! -f "$outputDir"/"gencode.v"$version".ucsc.rmsk.tx.to.gene.csv" ]; then
+		cat "$outputDir"/"gencode.v"$version".tx.to.gene.csv" "$outputDir"/"$ucscRmskInsertTx2GeneCSV" > "$outputDir"/"gencode.v"$version".ucsc.rmsk.tx.to.gene.csv"
+	fi
+
+	set +x
+
+}
+
+function makeSalmonDecoys(){
+
+	version="$1"
+	outputDir="$2"
+	gencodePrimaryAssemblyFA="$3"
+	decoysOut="$outputDir"/"gencode.v""$version"".decoys.txt"
+
+		if [ -f "$decoysOut" ]; then
+
+			set -x
+
+			grep "^>" <(gunzip -c "$outputDir"/"$(basename "$gencodePrimaryAssemblyFA")") | \
+				cut -d" " -f1 | \
+				sed -e 's/>//g' > "$decoysOut"
+
+			set +x
+		fi
+
+}
+
+function makeProcessAwareReferences(){
+
+	outputDir="$1"
+
+	set -x
+
+	echo "$outputDir" | Rscript processAwareSalmonReference.R
+
+	echo "$outputDir" | Rscript genereLinkedTxome.R
+
+	set +x
+
+}
+
+function makeSalmonIndexes(){
+
+	if [ ! -x "$(command -v salmon)" ]; then
+
+		echo "please install salmon or activate the correct conda environment"
+		exit 1
+
+	else
+
+		set -x
+
+		version="$1"
+		outputDir="$2"
+		kimlabIndexDir="$3"
+		gencodeTranscriptFA="$4"
+		ucscRmskInsertFA="$5"
+		gencodePrimaryAssemblyFA="$6"
+		processAwareFA="$outputDir"/"$7"
+
+
+		genTxFA="$outputDir"/"$(basename "$gencodeTranscriptFA")"
+		genomeFA="$outputDir"/"$(basename "$gencodePrimaryAssemblyFA")"
+
+		salmonVersion=`salmon -v | cut -d' ' -f2`
+
+		salmon index \
+			-t <(cat "$genTxFA" "$genomeFA") \
+			-i "$kimlabIndexDir"/"sel.align.gencode.v""$version"".salmon.v""$salmonVersion"".sidx" \
+			-p 16 \
+			-d "$outputDir"/"gencode.v""$version"".decoys.txt"
+
+		
+		salmon index \
+			-t <(cat "$genTxFA" "$ucscRmskInsertFA" "$genomeFA") \
+			-i "$kimlabIndexDir"/"sel.align.gencode.v""$version"".ucsc.rmsk.salmon.v""$salmonVersion"".sidx" \
+			-p 16 \
+			-d "$outputDir"/"gencode.v""$version"".decoys.txt"
+
+		salmon index \
+			-t <(cat "$processAwareFA" "$genomeFA") \
+			-i "$kimlabIndexDir"/"sel.align.gencode.v""$version"".process.aware.salmon.v""$salmonVersion"".sidx" \
+			-p 16 \
+			-d "$outputDir"/"gencode.v""$version"".decoys.txt"
+
+		set +x
+
+	fi
+
+}
 
 downloadDataSets "$dataGenerationList"
 
+makeTx2Gene "$gencodeTranscriptFA" "$ucscRmskInsertTx2GeneCSV" "$outputDir"
 
+makeSalmonDecoys "$version" "$outputDir" "$gencodePrimaryAssemblyFA"
 
+makeProcessAwareReferences "$outputDir"
 
-
-
-
-
-
-
-
+makeSalmonIndexes "$version" "$outputDir" "$kimlabIndexDir" \
+	"$gencodeTranscriptFA" "$ucscRmskInsertFA" "$gencodePrimaryAssemblyFA" \
+	"gencode.v""$version"".annotation.expanded.fa"
