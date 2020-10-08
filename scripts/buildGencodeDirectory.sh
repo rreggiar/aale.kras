@@ -24,6 +24,7 @@
 ## [ucsc repeat browser consensus fasta](/public/groups/kimlab/genomes.annotations/repeat.browser.hg38reps.fa)
 ### NOTE: these used to be accessible via the UCSC GB FTP server but I cannot locat them anymore ... as always they can be 
 ### generated via the `table browser` utility but this does not support programmatic access
+### rerwip
 
 scriptName=$(basename $0)
 if [ $# -lt 1 ]; then
@@ -139,12 +140,13 @@ function makeSalmonDecoys(){
 function makeProcessAwareReferences(){
 
 	outputDir="$1"
+	version="$2"
 
 	set -x
 
-	echo "$outputDir" | Rscript processAwareSalmonReference.R
-
-	echo "$outputDir" | Rscript generateLinkedTxome.R
+	if [ ! -f "$outputDir"/"gencode.v""$version"".annotation.expanded.fa" ]; then
+		echo "$outputDir" | Rscript processAwareSalmonReference.R
+	fi
 
 	set +x
 
@@ -173,6 +175,9 @@ function makeSalmonIndexes(){
 		genTxFA="$outputDir"/"$(basename "$gencodeTranscriptFA")"
 		genomeFA="$outputDir"/"$(basename "$gencodePrimaryAssemblyFA")"
 
+		gunzip "$genTxFA"
+		gunzip "$genomeFA"
+
 		salmonVersion=`salmon -v | cut -d' ' -f2`
 
 		if [ ! -d "$kimlabIndexDir"/"sel.align.gencode.v""$version"".salmon.v""$salmonVersion"".sidx" ]; then
@@ -184,11 +189,16 @@ function makeSalmonIndexes(){
 		fi
 
 		if [ ! -d "$kimlabIndexDir"/"sel.align.gencode.v""$version"".ucsc.rmsk.salmon.v""$salmonVersion"".sidx" ]; then
+
+			cat "$genTxFA" "$ucscRmskInsertFA" > "$outputDir""/tmpUcscRmskFA.fa"
+
 			salmon index \
-				-t <(cat "$genTxFA" "$ucscRmskInsertFA" "$genomeFA") \
+				-t <(cat "$outputDir""/tmpUcscRmskFA.fa" "$genomeFA") \
 				-i "$kimlabIndexDir"/"sel.align.gencode.v""$version"".ucsc.rmsk.salmon.v""$salmonVersion"".sidx" \
 				-p 16 \
 				-d "$outputDir"/"gencode.v""$version"".decoys.txt"
+
+			rm "$outputDir""/tmpUcscRmskFA.fa"
 		fi
 
 		if [ ! -d "$kimlabIndexDir"/"sel.align.gencode.v""$version"".process.aware.salmon.v""$salmonVersion"".sidx" ]; then
@@ -199,20 +209,32 @@ function makeSalmonIndexes(){
 				-d "$outputDir"/"gencode.v""$version"".decoys.txt"
 		fi
 
+		if [ ! -f "$outputDir"/"gencode.v""$version"".annotation.expanded.json" ]; then
+
+			if [ -d "$kimlabIndexDir"/"sel.align.gencode.v""$version"".process.aware.salmon.v""$salmonVersion"".sidx" ]; then
+
+				echo "$outputDir" | Rscript generateLinkedTxome.R
+			fi
+
+		fi
+
 		set +x
+
+		gzip "$genomeFA"
+		gzip "$genTxFA"
 
 	fi
 
 }
 
-# downloadDataSets "$dataGenerationList"
+downloadDataSets "$dataGenerationList"
 
-# makeTx2Gene "$gencodeTranscriptFA" "$ucscRmskInsertTx2GeneCSV" "$outputDir"
+makeTx2Gene "$gencodeTranscriptFA" "$ucscRmskInsertTx2GeneCSV" "$outputDir"
 
-# makeSalmonDecoys "$version" "$outputDir" "$gencodePrimaryAssemblyFA"
+makeSalmonDecoys "$version" "$outputDir" "$gencodePrimaryAssemblyFA"
 
-makeProcessAwareReferences "$outputDir"
+makeProcessAwareReferences "$outputDir" "$version"
 
-# makeSalmonIndexes "$version" "$outputDir" "$kimlabIndexDir" \
-# 	"$gencodeTranscriptFA" "$ucscRmskInsertFA" "$gencodePrimaryAssemblyFA" \
-# 	"gencode.v""$version"".annotation.expanded.fa"
+makeSalmonIndexes "$version" "$outputDir" "$kimlabIndexDir" \
+	"$gencodeTranscriptFA" "$ucscRmskInsertFA" "$gencodePrimaryAssemblyFA" \
+	"gencode.v""$version"".annotation.expanded.fa"
