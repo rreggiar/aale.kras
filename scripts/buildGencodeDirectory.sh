@@ -170,6 +170,13 @@ function makeProcessAwareReferences(){
 
 function makeSalmonIndexes(){
 
+	# go through the utilities we've collected and use them to generate salmon indices that 
+	# can be used by `salmon quant` moving forward
+
+	## 1. standard gencode index
+	## 2. gencode + TE insertions index
+	## 3. process-aware (intron/exon) gencode index
+
 	if [ ! -x "$(command -v salmon)" ]; then
 
 		echo "please install salmon or activate the correct conda environment"

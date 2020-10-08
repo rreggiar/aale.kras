@@ -12,7 +12,7 @@ suppressPackageStartupMessages({
 paths.in <- paths.in <- scan(file=file("stdin", "r"), what="character", n=2)
 index.dir <- "/public/groups/kimlab/indexes"
 
-if (length(paths.in) < 1) {
+if (length(paths.in) < 2) {
   cat('please provide all arguments: [1] input directory [2] salmon version')
   quit(status = 1)
 }
@@ -20,6 +20,10 @@ if (length(paths.in) < 1) {
 input.dir <- paths.in[1]
 salmon.version <- paths.in[2]
 gencode.version <- substring(input.dir, first = nchar(input.dir)-1, last = nchar(input.dir))
+
+# salmon.version <- '1.3.0'
+# gencode.version <- '35'
+# file.path(index.dir, paste0("sel.align.gencode.v", gencode.version, ".process.aware.salmon.v",salmon.version,".sidx"))
 
 tximeta::makeLinkedTxome(
     indexDir = file.path(index.dir, paste0("sel.align.gencode.v", gencode.version, ".process.aware.salmon.v",salmon.version,".sidx")),
