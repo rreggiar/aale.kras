@@ -12,10 +12,10 @@ suppressPackageStartupMessages({
 paths.in <- paths.in <- scan(file=file("stdin", "r"), what="character", n=2)
 index.dir <- "/public/groups/kimlab/indexes"
 
-if (length(paths.in) < 2) {
-  cat('please provide all arguments: [1] input directory [2] salmon version')
-  quit(status = 1)
-}
+# if (length(paths.in) < 2) {
+#   cat('please provide all arguments: [1] input directory [2] salmon version')
+#   quit(status = 1)
+# }
 
 input.dir <- paths.in[1]
 salmon.version <- paths.in[2]
