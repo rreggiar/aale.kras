@@ -8,6 +8,7 @@ suppressPackageStartupMessages({
     library(Biostrings)
     library(eisaR)
     library(GenomicFeatures)
+    library(BSgenome)
 })
 
 paths.in <- paths.in <- scan(file=file("stdin", "r"), what="character", n=1)
@@ -42,6 +43,7 @@ seqs <- GenomicFeatures::extractTranscriptSeqs(
     x = genome, 
     transcripts = grl
 )
+
 cat('fasta')
 Biostrings::writeXStringSet(
     seqs, filepath = file.path(input.dir, paste0('gencode.v', gencode.version, '.annotation.expanded.fa'))

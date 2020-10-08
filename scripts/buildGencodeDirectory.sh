@@ -144,7 +144,7 @@ function makeProcessAwareReferences(){
 
 	echo "$outputDir" | Rscript processAwareSalmonReference.R
 
-	echo "$outputDir" | Rscript genereLinkedTxome.R
+	echo "$outputDir" | Rscript generateLinkedTxome.R
 
 	set +x
 
@@ -175,24 +175,29 @@ function makeSalmonIndexes(){
 
 		salmonVersion=`salmon -v | cut -d' ' -f2`
 
-		salmon index \
-			-t <(cat "$genTxFA" "$genomeFA") \
-			-i "$kimlabIndexDir"/"sel.align.gencode.v""$version"".salmon.v""$salmonVersion"".sidx" \
-			-p 16 \
-			-d "$outputDir"/"gencode.v""$version"".decoys.txt"
+		if [ ! -d "$kimlabIndexDir"/"sel.align.gencode.v""$version"".salmon.v""$salmonVersion"".sidx" ]; then
+			salmon index \
+				-t <(cat "$genTxFA" "$genomeFA") \
+				-i "$kimlabIndexDir"/"sel.align.gencode.v""$version"".salmon.v""$salmonVersion"".sidx" \
+				-p 16 \
+				-d "$outputDir"/"gencode.v""$version"".decoys.txt"
+		fi
 
-		
-		salmon index \
-			-t <(cat "$genTxFA" "$ucscRmskInsertFA" "$genomeFA") \
-			-i "$kimlabIndexDir"/"sel.align.gencode.v""$version"".ucsc.rmsk.salmon.v""$salmonVersion"".sidx" \
-			-p 16 \
-			-d "$outputDir"/"gencode.v""$version"".decoys.txt"
+		if [ ! -d "$kimlabIndexDir"/"sel.align.gencode.v""$version"".ucsc.rmsk.salmon.v""$salmonVersion"".sidx" ]; then
+			salmon index \
+				-t <(cat "$genTxFA" "$ucscRmskInsertFA" "$genomeFA") \
+				-i "$kimlabIndexDir"/"sel.align.gencode.v""$version"".ucsc.rmsk.salmon.v""$salmonVersion"".sidx" \
+				-p 16 \
+				-d "$outputDir"/"gencode.v""$version"".decoys.txt"
+		fi
 
-		salmon index \
-			-t <(cat "$processAwareFA" "$genomeFA") \
-			-i "$kimlabIndexDir"/"sel.align.gencode.v""$version"".process.aware.salmon.v""$salmonVersion"".sidx" \
-			-p 16 \
-			-d "$outputDir"/"gencode.v""$version"".decoys.txt"
+		if [ ! -d "$kimlabIndexDir"/"sel.align.gencode.v""$version"".process.aware.salmon.v""$salmonVersion"".sidx" ]; then
+			salmon index \
+				-t <(cat "$processAwareFA" "$genomeFA") \
+				-i "$kimlabIndexDir"/"sel.align.gencode.v""$version"".process.aware.salmon.v""$salmonVersion"".sidx" \
+				-p 16 \
+				-d "$outputDir"/"gencode.v""$version"".decoys.txt"
+		fi
 
 		set +x
 
@@ -200,14 +205,14 @@ function makeSalmonIndexes(){
 
 }
 
-downloadDataSets "$dataGenerationList"
+# downloadDataSets "$dataGenerationList"
 
-makeTx2Gene "$gencodeTranscriptFA" "$ucscRmskInsertTx2GeneCSV" "$outputDir"
+# makeTx2Gene "$gencodeTranscriptFA" "$ucscRmskInsertTx2GeneCSV" "$outputDir"
 
-makeSalmonDecoys "$version" "$outputDir" "$gencodePrimaryAssemblyFA"
+# makeSalmonDecoys "$version" "$outputDir" "$gencodePrimaryAssemblyFA"
 
 makeProcessAwareReferences "$outputDir"
 
-makeSalmonIndexes "$version" "$outputDir" "$kimlabIndexDir" \
-	"$gencodeTranscriptFA" "$ucscRmskInsertFA" "$gencodePrimaryAssemblyFA" \
-	"gencode.v""$version"".annotation.expanded.fa"
+# makeSalmonIndexes "$version" "$outputDir" "$kimlabIndexDir" \
+# 	"$gencodeTranscriptFA" "$ucscRmskInsertFA" "$gencodePrimaryAssemblyFA" \
+# 	"gencode.v""$version"".annotation.expanded.fa"

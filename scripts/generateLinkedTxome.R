@@ -6,6 +6,7 @@
 
 suppressPackageStartupMessages({
   library(tximeta)
+  library(rjson)
 })
 
 paths.in <- paths.in <- scan(file=file("stdin", "r"), what="character", n=1)
