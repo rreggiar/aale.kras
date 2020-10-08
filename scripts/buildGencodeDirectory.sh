@@ -22,8 +22,8 @@
 ## [ucsc rmsk insertion fasta](/public/groups/kimlab/genomes.annotations/formatted.UCSC.gb.rmsk.insert.fa)
 ### replace all the ' ' with '_' so that it plays nicely with downstream processes
 ## [ucsc repeat browser consensus fasta](/public/groups/kimlab/genomes.annotations/repeat.browser.hg38reps.fa)
-### NOTE: these used to be accessible via the UCSC GB FTP server but I cannot locat them anymore ... as always they can be 
-### generated via the `table browser` utility but this does not support programmatic access
+### NOTE: these used to be accessible via the UCSC GB FTP server but I cannot locate them anymore ... as always they can be 
+### can be generated via the `table browser` utility but this does not support programmatic access
 ### rerwip
 
 scriptName=$(basename $0)
@@ -90,6 +90,9 @@ function downloadDataSets(){
 
 function makeTx2Gene(){
 
+	# parse the fasta headers into tx (long meta data) and gene (just column 6 of the meta data)
+	# combine into a csv
+
 	gencodeTranscriptFA="$1"
 	ucscRmskInsertTx2GeneCSV="$2"
 	outputDir="$3"
@@ -119,6 +122,12 @@ function makeTx2Gene(){
 
 function makeSalmonDecoys(){
 
+	# probably okay to reuse old ones but may as well stay up to date
+	# (following this protocol)[https://combine-lab.github.io/alevin-tutorial/2019/selective-alignment/]
+	# but modifying the indexing step slightly
+
+	# passes the entire genome as the decoy for transcript quantification adjustment
+
 	version="$1"
 	outputDir="$2"
 	gencodePrimaryAssemblyFA="$3"
@@ -138,6 +147,13 @@ function makeSalmonDecoys(){
 }
 
 function makeProcessAwareReferences(){
+
+	# want to quantify the intronic/exonic alignments
+	# normally used for single cell velocity, trying to repurpose for 
+	# cfRNA analysis
+
+	# [process-aware alignmnet (modified below)](https://combine-lab.github.io/alevin-tutorial/2020/alevin-velocity/)
+	# see Rscript dependency
 
 	outputDir="$1"
 	version="$2"
