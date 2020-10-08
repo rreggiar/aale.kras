@@ -21,9 +21,9 @@ input.dir <- paths.in[1]
 # input.dir <- '/public/groups/kimlab/genomes.annotations/gencode.35'
 gencode.version <- substring(input.dir, first = nchar(input.dir)-1, last = nchar(input.dir))
 
-
+cat('gtf')
 gtf <- file.path(input.dir, paste0('gencode.v', gencode.version, '.annotation.gtf.gz'))
-
+cat('grl')
 grl <- eisaR::getFeatureRanges(
     gtf = gtf,
     featureType = c("spliced", "intron"), 
@@ -32,21 +32,21 @@ grl <- eisaR::getFeatureRanges(
     joinOverlappingIntrons = FALSE, 
     verbose = TRUE
 )
-
+cat('genome')
 genome <- Biostrings::readDNAStringSet(
     file.path(input.dir, 'GRCh38.primary_assembly.genome.fa.gz')
 )
-
+cat('seqs')
 names(genome) <- sapply(strsplit(names(genome), " "), .subset, 1)
 seqs <- GenomicFeatures::extractTranscriptSeqs(
     x = genome, 
     transcripts = grl
 )
-
+cat('fasta')
 Biostrings::writeXStringSet(
     seqs, filepath = file.path(input.dir, paste0('gencode.v', gencode.version, '.annotation.expanded.fa'))
 )
-
+cat('gtf out')
 eisaR::exportToGtf(
     grl, 
     filepath = file.path(input.dir, paste0('gencode.v', gencode.version, '.annotation.expanded.gtf'))

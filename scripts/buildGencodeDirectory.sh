@@ -109,7 +109,7 @@ function makeTx2Gene(){
 	fi
 	# gencode + rmsk tx.2.gene
 	if [ ! -f "$outputDir"/"gencode.v"$version".ucsc.rmsk.tx.to.gene.csv" ]; then
-		cat "$outputDir"/"gencode.v"$version".tx.to.gene.csv" "$outputDir"/"$ucscRmskInsertTx2GeneCSV" > "$outputDir"/"gencode.v"$version".ucsc.rmsk.tx.to.gene.csv"
+		cat "$outputDir"/"gencode.v"$version".tx.to.gene.csv" "$ucscRmskInsertTx2GeneCSV" > "$outputDir"/"gencode.v"$version".ucsc.rmsk.tx.to.gene.csv"
 	fi
 
 	set +x
@@ -123,7 +123,7 @@ function makeSalmonDecoys(){
 	gencodePrimaryAssemblyFA="$3"
 	decoysOut="$outputDir"/"gencode.v""$version"".decoys.txt"
 
-		if [ -f "$decoysOut" ]; then
+		if [ ! -f "$decoysOut" ]; then
 
 			set -x
 
