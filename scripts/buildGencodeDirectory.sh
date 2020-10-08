@@ -175,14 +175,13 @@ function makeSalmonIndexes(){
 		genTxFA="$outputDir"/"$(basename "$gencodeTranscriptFA")"
 		genomeFA="$outputDir"/"$(basename "$gencodePrimaryAssemblyFA")"
 
-		gunzip "$genTxFA"
-		gunzip "$genomeFA"
 
 		salmonVersion=`salmon -v | cut -d' ' -f2`
 
 		if [ ! -d "$kimlabIndexDir"/"sel.align.gencode.v""$version"".salmon.v""$salmonVersion"".sidx" ]; then
+
 			salmon index \
-				-t <(cat "$genTxFA" "$genomeFA") \
+				-t <(zcat "$genTxFA" "$genomeFA") \
 				-i "$kimlabIndexDir"/"sel.align.gencode.v""$version"".salmon.v""$salmonVersion"".sidx" \
 				-p 16 \
 				-d "$outputDir"/"gencode.v""$version"".decoys.txt"
@@ -190,10 +189,10 @@ function makeSalmonIndexes(){
 
 		if [ ! -d "$kimlabIndexDir"/"sel.align.gencode.v""$version"".ucsc.rmsk.salmon.v""$salmonVersion"".sidx" ]; then
 
-			cat "$genTxFA" "$ucscRmskInsertFA" > "$outputDir""/tmpUcscRmskFA.fa"
+			cat <(zcat "$genTxFA") "$ucscRmskInsertFA" > "$outputDir""/tmpUcscRmskFA.fa"
 
 			salmon index \
-				-t <(cat "$outputDir""/tmpUcscRmskFA.fa" "$genomeFA") \
+				-t <(cat "$outputDir""/tmpUcscRmskFA.fa" <(gunzip -c "$genomeFA")) \
 				-i "$kimlabIndexDir"/"sel.align.gencode.v""$version"".ucsc.rmsk.salmon.v""$salmonVersion"".sidx" \
 				-p 16 \
 				-d "$outputDir"/"gencode.v""$version"".decoys.txt"
@@ -203,7 +202,7 @@ function makeSalmonIndexes(){
 
 		if [ ! -d "$kimlabIndexDir"/"sel.align.gencode.v""$version"".process.aware.salmon.v""$salmonVersion"".sidx" ]; then
 			salmon index \
-				-t <(cat "$processAwareFA" "$genomeFA") \
+				-t <(cat "$processAwareFA" <(gunzip -c "$genomeFA")) \
 				-i "$kimlabIndexDir"/"sel.align.gencode.v""$version"".process.aware.salmon.v""$salmonVersion"".sidx" \
 				-p 16 \
 				-d "$outputDir"/"gencode.v""$version"".decoys.txt"
@@ -219,9 +218,6 @@ function makeSalmonIndexes(){
 		fi
 
 		set +x
-
-		gzip "$genomeFA"
-		gzip "$genTxFA"
 
 	fi
 
